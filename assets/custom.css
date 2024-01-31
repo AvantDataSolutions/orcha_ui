@@ -1,0 +1,153 @@
+/* --------------------------------------------------- */
+/* general */
+/* --------------------------------------------------- */
+
+.content-row {
+    border-radius: 15px;
+    background-color: white;
+    padding: 10px;
+    margin: 10px;
+}
+
+.content-row.no-bkg {
+    background-color: transparent;
+}
+
+
+/* --------------------------------------------------- */
+/* main page */
+/* --------------------------------------------------- */
+
+html, .main-page {
+    background-color: #f3f2f2;
+}
+
+.nav-card {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+    text-decoration: none;
+    width: auto;
+    border-radius: 5px;
+}
+
+.nav-card:hover {
+    background-color: #d6d6d6;
+    text-decoration: none;
+}
+
+.nav-card.active {
+    border-left: 5px solid #001832;
+}
+
+.nav-icon {
+    width: 3rem;
+}
+
+.nav-link {
+    color: black;
+}
+
+.nav-link:hover {
+    color: black;
+}
+
+
+/* --------------------------------------------------- */
+/* overview page */
+/* --------------------------------------------------- */
+
+.task-link {
+    color: black;
+    text-decoration: none;
+
+}
+
+.refresh-time {
+    font-size: 1rem;
+    color: rgb(172, 172, 172);
+}
+
+/* Run status slices */
+.run-success {
+    background-color: green;
+    color: green;
+    margin: 0;
+    border-right: 1px solid black;
+    cursor: pointer;
+}
+
+.run-failed {
+    background-color: red;
+    color: red;
+    margin: 0;
+    border-right: 1px solid black;
+    cursor: pointer;
+}
+
+.run-warning {
+    background-color: orange;
+    color: orange;
+    margin: 0;
+    border-right: 1px solid black;
+    cursor: pointer;
+}
+
+.run-queued {
+    background-color: blue;
+    color: blue;
+    margin: 0;
+    border-right: 1px solid black;
+    cursor: pointer;
+}
+
+.run-running {
+    background-color: purple;
+    color: purple;
+    margin: 0;
+    border-right: 1px solid black;
+    cursor: pointer;
+}
+
+/* Run status slice tooltips */
+.c-tooltip {
+    position: relative;
+    display: inline-block;
+  }
+
+  .c-tooltip .c-tooltiptext {
+    visibility: hidden;
+    /* display: none; */
+    width: 280px;
+    background-color: darkslategray;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px;
+    position: absolute;
+    z-index: 9000;
+    top: 150%;
+    left: 50%;
+    margin-left: -270px;
+  }
+
+  .c-tooltip .c-tooltiptext::after {
+    content: "";
+    position: absolute;
+    bottom: 100%;
+    left: 270px;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: transparent transparent black transparent;
+  }
+
+  .c-tooltiptext p {
+    margin: 0;
+  }
+
+  .c-tooltip:hover .c-tooltiptext {
+    visibility: visible;
+    /* display:block */
+  }
