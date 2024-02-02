@@ -176,13 +176,14 @@ def layout(hours: int | None = None):
     except ValueError:
         hours = 6
 
-    all_tasks = tasks.TaskItem.get_all()
+    task_elements = []
 
-    task_elements = create_all_task_elements(
-        all_tasks=all_tasks,
-        display_start_time=display_start_time,
-        display_end_time=display_end_time
-    )
+    # all_tasks = tasks.TaskItem.get_all()
+    # task_elements = create_all_task_elements(
+    #     all_tasks=all_tasks,
+    #     display_start_time=display_start_time,
+    #     display_end_time=display_end_time
+    # )
 
     return [
         html.Div(className='container-fluid', children=[
@@ -206,6 +207,17 @@ def layout(hours: int | None = None):
                         id='ov-lookback-hours',
                         type='number'
                     ),
+                ]),
+                # toggle to show disabled tasks
+                html.Div(className='col-auto', children=[
+                    'Show Disabled'
+                ]),
+                html.Div(className='col-auto', children=[
+                    dcc.Checklist(
+                        id='ov-show-disabled',
+                        options=[{'label': '', 'value': 'show_disabled'}],
+                        value=[]
+                    )
                 ]),
                 # align a refresh button on the right
                 html.Div(className='col', children=[
@@ -255,9 +267,10 @@ def layout(hours: int | None = None):
     Input('ov-end-time', 'value'),
     Input('ov-lookback-hours', 'value'),
     Input('ov-refresh-button', 'n_clicks'),
+    Input('ov-show-disabled', 'value'),
     prevent_initial_call=True,
 )
-def update_task_list(end_time, lookback_hours, refresh_clicks):
+def update_task_list(end_time, lookback_hours, refresh_clicks, show_disabled):
     if end_time is None:
         return dash.no_update
     if lookback_hours is None:
@@ -270,6 +283,9 @@ def update_task_list(end_time, lookback_hours, refresh_clicks):
     display_start_time = display_end_time - td(hours=lookback_hours)
 
     all_tasks = tasks.TaskItem.get_all()
+
+    if 'show_disabled' not in show_disabled:
+        all_tasks = [task for task in all_tasks if task.status == 'enabled']
 
     return (
         create_all_task_elements(
