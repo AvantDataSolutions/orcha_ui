@@ -151,7 +151,8 @@ def create_all_task_elements(
         )
 
     max_runs = 500
-    runs_per_task = int(max_runs / len(task_runs))
+    max_per_task = 250
+    runs_per_task: dict[str, int] = {}
 
     task_elements = []
     task_elements.append(create_tasks_overview(
@@ -159,11 +160,19 @@ def create_all_task_elements(
         runs=task_runs
     ))
 
+    total_runs = 0
+    for _, runs in task_runs.items():
+        total_runs += len(runs)
+
+    if total_runs > max_runs:
+        for task_idk, runs in task_runs.items():
+            runs_per_task[task_idk] = min(int(len(runs) * max_runs / total_runs), max_per_task)
+
     for task in all_tasks:
         task_elements.append(create_task_element(
             task=task,
             all_runs=task_runs[task.task_idk],
-            display_count=runs_per_task,
+            display_count=runs_per_task.get(task.task_idk, 100),
             display_start_time=display_start_time,
             display_end_time=display_end_time
         ))
@@ -171,7 +180,6 @@ def create_all_task_elements(
     return task_elements
 
 def layout(hours: int | None = None):
-    display_start_time = dt.utcnow() - td(hours=6)
     display_end_time = dt.utcnow()
 
     if hours is None:
@@ -185,13 +193,6 @@ def layout(hours: int | None = None):
         hours = 6
 
     task_elements = []
-
-    # all_tasks = tasks.TaskItem.get_all()
-    # task_elements = create_all_task_elements(
-    #     all_tasks=all_tasks,
-    #     display_start_time=display_start_time,
-    #     display_end_time=display_end_time
-    # )
 
     return [
         html.Div(className='container-fluid', children=[
