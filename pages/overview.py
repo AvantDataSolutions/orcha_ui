@@ -54,6 +54,14 @@ def create_tasks_overview(
                     html.P(task_runs[-1:][0].scheduled_time if len(task_runs) > 0 else 'N/A')
                 ])
             ]),
+            html.Div(className='row', children=[
+                html.Div(className='col-auto', children=[
+                    html.H6('Next Scheduled'),
+                ]),
+                html.Div(className='col-auto', children=[
+                    task.get_next_scheduled_time()
+                ])
+            ]),
             run_slices_cmp.create_run_slice_row_bunched(
                 task_runs=task_runs,
                 slice_run_id_type='ov-popover-run'
