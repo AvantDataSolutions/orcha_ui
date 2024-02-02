@@ -51,7 +51,7 @@ def create_tasks_overview(
                     html.H6('Last Scheduled'),
                 ]),
                 html.Div(className='col-auto', children=[
-                    html.P(task_runs[-1].scheduled_time)
+                    html.P(task_runs[-1:][0].scheduled_time if len(task_runs) > 0 else 'N/A')
                 ])
             ]),
             run_slices_cmp.create_run_slice_row_bunched(
