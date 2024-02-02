@@ -207,19 +207,7 @@ def layout(task_id: str = ''):
         ])
     ]
 
-# navigate to the run details page
-@dash.callback(
-    Output('app-location', 'pathname', allow_duplicate=True),
-    Input({'type': 'td-popover-run', 'index': ALL}, 'n_clicks'),
-    prevent_initial_call=True,
-)
-def navigate_to_run_details(n_clicks):
-    if all([x is None for x in n_clicks]):
-        return dash.no_update
-    if dash.ctx.triggered_id is None:
-        return dash.no_update
-    run_id = dash.ctx.triggered_id['index']
-    return f'/run_details?run_id={run_id}'
+
 
 
 # update the task details page

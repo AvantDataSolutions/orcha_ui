@@ -63,8 +63,7 @@ def create_tasks_overview(
                 ])
             ]),
             run_slices_cmp.create_run_slice_row_bunched(
-                task_runs=task_runs,
-                slice_run_id_type='ov-popover-run'
+                task_runs=task_runs
             ),
         ]))
 
@@ -306,20 +305,3 @@ def update_task_list(end_time, lookback_hours, refresh_clicks, show_disabled):
         end_time,
         '?hours=' + str(lookback_hours)
     )
-
-
-
-# navigate to the run details page
-@dash.callback(
-    Output('app-location', 'pathname', allow_duplicate=True),
-    Input({'type': 'ov-popover-run', 'index': ALL}, 'n_clicks'),
-    prevent_initial_call=True,
-)
-def navigate_to_run_details(n_clicks):
-    if all([x is None for x in n_clicks]):
-        return dash.no_update
-    if dash.ctx.triggered_id is None:
-        return dash.no_update
-    run_id = dash.ctx.triggered_id['index']
-    return f'/run_details?run_id={run_id}'
-

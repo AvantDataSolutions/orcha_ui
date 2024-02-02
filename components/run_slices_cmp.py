@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 from datetime import datetime as dt
 
-from dash import html
+import dash
+from dash import ALL, Input, Output, html
 
 from orcha.core import tasks
+
+POPOVER_ID_TYPE = 'rcs-popover-run'
 
 
 def get_run_slice_css_class(run: tasks.RunItem):
@@ -22,10 +25,8 @@ def get_run_slice_css_class(run: tasks.RunItem):
     else:
         return 'run-unknown'
 
-def create_run_slice_row_bunched(
-        task_runs: list[tasks.RunItem],
-        slice_run_id_type: str,
-    ):
+
+def create_run_slice_row_bunched(task_runs: list[tasks.RunItem]):
     """
     Creates a row of run slices for a task without spacing between runs
     based on time between runs. Useful for 'last 5 runs' etc.
@@ -37,7 +38,7 @@ def create_run_slice_row_bunched(
         html.Div(className='col-auto', children=[
             html.Div(
                 id={
-                    'type': slice_run_id_type,
+                    'type': POPOVER_ID_TYPE,
                     'index': run.run_idk
                 },
                 style={'width': '10px'},
@@ -120,7 +121,7 @@ def create_run_slice_row(
 
         run_elements.append(html.Div(
             id={
-                'type': 'ov-popover-run',
+                'type': POPOVER_ID_TYPE,
                 'index': run.run_idk
             },
             style={'width': _get_run_width(run)},
@@ -158,3 +159,22 @@ def create_run_slice_row(
             for element in run_elements
         ])
     ])
+
+
+# navigate to the run details page
+@dash.callback(
+    Output('app-location', 'pathname', allow_duplicate=True),
+    Output('app-location', 'search', allow_duplicate=True),
+    Input({'type': POPOVER_ID_TYPE, 'index': ALL}, 'n_clicks'),
+    prevent_initial_call=True,
+)
+def navigate_to_run_details(n_clicks):
+    if all([x is None for x in n_clicks]):
+        return dash.no_update
+    if dash.ctx.triggered_id is None:
+        return dash.no_update
+    run_id = dash.ctx.triggered_id['index']
+    return [
+        '/run_details',
+        f'?run_id={run_id}'
+    ]
