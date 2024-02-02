@@ -67,7 +67,7 @@ app.layout = html.Div(className='container-fluid p-3 main-page', children=[
                     src=f'{PLOTLY_APP_PATH}assets/orcha-font-black.png',
                     height='40px'
                 ),
-            ], className='column m-0 h4 home-link', href=PLOTLY_APP_PATH),
+            ], className='column m-0 h4 home-link', href=f'{PLOTLY_APP_PATH}overview'),
             html.Div('-', id='app-h3-username', className='row m-0 pb-3 text-muted'),
             html.Div(className='row d-none', children=[
                 dcc.Dropdown(id='in-page', options=[]),
