@@ -162,9 +162,19 @@ def create_all_task_elements(
 
     return task_elements
 
-def layout():
+def layout(hours: int | None = None):
     display_start_time = dt.utcnow() - td(hours=6)
     display_end_time = dt.utcnow()
+
+    if hours is None:
+        hours = 6
+
+    try:
+        hours = int(hours)
+        if hours < 1:
+            hours = 1
+    except ValueError:
+        hours = 6
 
     all_tasks = tasks.TaskItem.get_all()
 
@@ -192,7 +202,7 @@ def layout():
                 ]),
                 html.Div(className='col-auto', children=[
                     dcc.Input(
-                        value=6,
+                        value=hours,
                         id='ov-lookback-hours',
                         type='number'
                     ),
@@ -241,6 +251,7 @@ def layout():
     Output('ov-task-list', 'children', allow_duplicate=True),
     Output('ov-end-time', 'value'),
     Output('ov-last-refreshed', 'children'),
+    Output('app-location-norefresh', 'search'),
     Input('ov-end-time', 'value'),
     Input('ov-lookback-hours', 'value'),
     Input('ov-refresh-button', 'n_clicks'),
@@ -267,7 +278,8 @@ def update_task_list(end_time, lookback_hours, refresh_clicks):
             display_end_time=display_end_time
         ),
         dt.utcnow().strftime('%Y-%m-%dT%H:%M'),
-        end_time
+        end_time,
+        '?hours=' + str(lookback_hours)
     )
 
 
