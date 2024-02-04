@@ -158,6 +158,8 @@ def layout(task_id: str = ''):
     all_tasks = tasks.TaskItem.get_all()
     task = tasks.TaskItem.get(task_id)
 
+    task_dropdown_value = task_id if task_id else ''
+
     if len(all_tasks) == 0:
         return html.Div(className='container-fluid', children=[
             html.Div(className='row', children=[
@@ -195,7 +197,7 @@ def layout(task_id: str = ''):
                     dcc.Dropdown(
                         id='td-task-dropdown',
                         options=[{'label': t.name, 'value': t.task_idk} for t in all_tasks],
-                        value='',
+                        value=task_dropdown_value,
                     )
                 ])
             ]),

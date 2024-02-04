@@ -115,6 +115,8 @@ def layout(run_id: str = ''):
 
     all_tasks = tasks.TaskItem.get_all()
 
+    task_dropdown_value = run.task_idf if run else ''
+
     top_dropdown_row = html.Div(className='row content-row no-bkg py-0 align-items-center', children=[
         html.Div(className='col-auto', children=[
             html.Span('Select Task')
@@ -123,7 +125,7 @@ def layout(run_id: str = ''):
             dcc.Dropdown(
                 id='rd-task-dropdown',
                 options=[{'label': t.name, 'value': t.task_idk} for t in all_tasks],
-                value='',
+                value=task_dropdown_value,
             )
         ]),
         html.Div(className='col-auto', children=[
