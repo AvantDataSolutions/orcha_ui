@@ -63,7 +63,7 @@ def create_run_detail_rows(run: tasks.RunItem | None):
             ]),
             # calculate duration
             html.Div(className='col', children=[
-                html.H6('Duration (hh:mm:ss.ms)'),
+                html.H6('Duration'),
                 html.P(duration),
             ]),
             html.Div(className='col', children=[
