@@ -67,6 +67,10 @@ def create_run_detail_rows(run: tasks.RunItem | None):
                 html.P(duration),
             ]),
             html.Div(className='col', children=[
+                html.H6('Last Active'),
+                html.P(run.last_active),
+            ]) if run.status == 'running' else '',
+            html.Div(className='col', children=[
                 html.H6('Status'),
                 html.P(run.status),
             ]),
