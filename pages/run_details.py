@@ -82,13 +82,13 @@ def create_run_detail_rows(run: tasks.RunItem | None):
         html.Div(className='row', children=[
             html.Div(className='col', children=[
                 html.H6('Config'),
-                html.P(json.dumps(run.config)),
+                html.Pre(json.dumps(run.config, indent=4)),
             ]),
         ]),
         html.Div(className='row', children=[
             html.Div(className='col', children=[
                 html.H6('Output'),
-                html.P(json.dumps(run.output)),
+                html.Pre(json.dumps(run.output, indent=4)),
             ]),
         ]),
         html.Div(className='row pt-5', children=[
