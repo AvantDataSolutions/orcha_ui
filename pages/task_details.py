@@ -92,10 +92,10 @@ def create_task_element(task: tasks.TaskItem):
             ]),
             *[
                 html.Div(className='col-auto', children=[
-                    html.H6('Cron Schedule'),
+                    html.H6('Frequency'),
                     html.P(sched.cron_schedule),
                     html.H6('Config'),
-                    html.P(json.dumps(sched.config))
+                    html.Pre(json.dumps(sched.config, indent=4))
                 ])
                 for sched in task.schedule_sets
             ]
