@@ -73,6 +73,18 @@ def create_task_element(task: tasks.TaskItem):
                 html.H6('Description'),
                 html.P(task.description),
             ]),
+            html.Div(className='col-auto', children=[
+                html.H6('Thread Group'),
+                html.P(task.thread_group),
+            ]),
+            html.Div(className='col-auto', children=[
+                html.H6('Metadata'),
+                html.Pre(json.dumps(task.task_metadata, indent=4))
+            ]),
+            html.Div(className='col-auto', children=[
+                html.H6('Status'),
+                html.P(task.status),
+            ]),
         ]),
         html.Div(className='row', children=[
             html.Div(className='col-12', children=[
