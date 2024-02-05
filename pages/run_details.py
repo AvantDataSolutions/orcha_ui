@@ -61,7 +61,6 @@ def create_run_detail_rows(run: tasks.RunItem | None):
                 html.H6('End Time'),
                 html.P(run.end_time),
             ]),
-            # calculate duration
             html.Div(className='col', children=[
                 html.H6('Duration'),
                 html.P(duration),
