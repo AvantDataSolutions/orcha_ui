@@ -303,3 +303,12 @@ def create_manual_run(n_clicks, config, task_id, schedule_id):
         return 'Manual run created'
     else:
         return 'Create Failed'
+
+
+@dash.callback(
+    Output('app-location-norefresh', 'search', allow_duplicate=True),
+    Input('td-task-dropdown', 'value'),
+    prevent_initial_call=True,
+)
+def update_url(task_id):
+    return f'?task_id={task_id}'
