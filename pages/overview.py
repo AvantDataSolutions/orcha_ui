@@ -33,9 +33,10 @@ def create_tasks_overview(
     ):
     elements = []
     for task in tasks:
-        task_runs = runs[task.task_idk][-5:]
         # sort by scheduled time
-        task_runs.sort(key=lambda x: x.scheduled_time)
+        runs[task.task_idk].sort(key=lambda x: x.scheduled_time)
+        # then get latest 5
+        task_runs = runs[task.task_idk][-5:]
         elements.append(html.Div(className='col-auto pb-5 pe-5', children=[
             html.Div(className='row', children=[
                 html.Div(className='col-auto', children=[
