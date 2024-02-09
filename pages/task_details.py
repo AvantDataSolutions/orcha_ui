@@ -127,6 +127,10 @@ def create_task_element(task: tasks.TaskItem):
                 html.H6('Status'),
                 html.P(task.status),
             ]),
+            html.Div(className='col-auto', children=[
+                html.H6('Last Active'),
+                html.P(task.last_active),
+            ]),
         ]),
         html.Div(className='row', children=[
             html.Div(className='col-12', children=[
