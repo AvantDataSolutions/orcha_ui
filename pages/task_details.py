@@ -43,6 +43,48 @@ def get_run_css_class(run: tasks.RunItem):
         return 'run-unknown'
 
 
+def create_run_history_table(task: tasks.TaskItem, all_runs: list[tasks.RunItem]):
+    data = []
+    all_runs.sort(key=lambda r: r.scheduled_time, reverse=True)
+    for run in all_runs:
+        if run.run_type == 'manual':
+            schedule_text = 'Manual'
+        else:
+            s_set = task.get_schedule_set(run.set_idf)
+            if s_set is not None:
+                schedule_text = s_set.cron_schedule
+            else:
+                schedule_text = 'Unknown'
+        data.append({
+            'Run ID': run.run_idk,
+            'Schedule': schedule_text,
+            'Status': run.status,
+            'Scheduled Time': run.scheduled_time,
+            'Start Time': run.start_time,
+            'End Time': run.end_time,
+        })
+
+    columns = [
+        {'name': 'Run ID', 'id': 'Run ID'},
+        {'name': 'Schedule', 'id': 'Schedule'},
+        {'name': 'Status', 'id': 'Status'},
+        {'name': 'Scheduled Time', 'id': 'Scheduled Time'},
+        {'name': 'Start Time', 'id': 'Start Time'},
+        {'name': 'End Time', 'id': 'End Time'}
+    ]
+
+    return html.Div(className='col-12', children=[
+        dash_table.DataTable(
+            data=data,
+            columns=columns,
+            # fixed_rows={'headers': True},
+            style_table={'height': '400px'},
+            style_cell={'textAlign': 'left'},
+            style_header={'fontWeight': 'bold'}
+        )
+    ])
+
+
 def create_task_element(task: tasks.TaskItem):
 
     all_runs = tasks.RunItem.get_all(
@@ -161,6 +203,15 @@ def create_task_element(task: tasks.TaskItem):
                     'index': 'td-out-create-run'
                 })
             ])
+        ]),
+        # create run histoy table
+        html.Div(className='row pt-5', children=[
+            html.Div(className='col-12', children=[
+                html.H4('Run History', className='border-bottom pb-2'),
+            ])
+        ]),
+        html.Div(className='row overflow-scroll', children=[
+            create_run_history_table(task, all_runs)
         ]),
     ]
 
