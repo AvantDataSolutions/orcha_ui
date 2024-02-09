@@ -96,12 +96,35 @@ def create_task_element(task: tasks.TaskItem):
     all_runs.sort(key=lambda r: r.scheduled_time)
     all_runs = all_runs[-200:]
 
+    if task.status == 'enabled':
+        toggle_buttton = html.Button(
+            id='td-btn-toggle-task',
+            className='btn btn-sm btn-danger',
+            children=[
+                'Disable Task'
+            ]
+        )
+    else:
+        toggle_buttton = html.Button(
+            id='td-btn-toggle-task',
+            className='btn btn-sm btn-primary',
+            children=[
+                'Enable Task'
+            ]
+        )
 
     return [
         html.Div(className='row', children=[
-            html.Div(className='col-12', children=[
-                html.H4('Task Details', className='border-bottom pb-2'),
-            ])
+            html.Div(className='col-12 border-bottom mb-2 ', children=[
+                html.Div(className='row justify-content-between', children=[
+                    html.Div(className='col-auto', children=[
+                        html.H4('Task Details'),
+                    ]),
+                    html.Div(className='col-auto', children=[
+                        toggle_buttton
+                    ]),
+                ]),
+            ]),
         ]),
         html.Div(className='row', children=[
             html.Div(className='col-auto', children=[
@@ -251,8 +274,8 @@ def layout(task_id: str = ''):
                 'type': autoclear_cpm.AUTOCLEAR_ID_TYPE,
                 'index': 'td-out-create-run'
             }),
-            dcc.Input(className='d-none', id='td-schedule-dropdown')
-
+            dcc.Input(className='d-none', id='td-schedule-dropdown'),
+            html.Button(className='d-none', id='td-btn-toggle-task'),
         ]
 
     return [
@@ -284,9 +307,11 @@ def layout(task_id: str = ''):
 @dash.callback(
     Output('td-task-details', 'children'),
     Input('td-task-dropdown', 'value'),
+    Input('td-btn-toggle-task', 'n_clicks'),
+    Input({'type': autoclear_cpm.AUTOCLEAR_ID_TYPE, 'index': 'td-out-create-run'}, 'children'),
     prevent_initial_call=True,
 )
-def update_task_details(task_id):
+def update_task_details(task_id, toggle_clicks, create_run_output):
     task = tasks.TaskItem.get(task_id)
     if task is None:
         return [
@@ -294,6 +319,12 @@ def update_task_details(task_id):
                 html.H3('Task not found'),
             ])
         ]
+    if dash.ctx.triggered_id == 'td-btn-toggle-task':
+        if task.status == 'enabled':
+            task.set_status('disabled', 'Manually disabled')
+        else:
+            task.set_status('enabled', 'Manually enabled')
+
     return create_task_element(task)
 
 
