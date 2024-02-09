@@ -26,6 +26,12 @@ dash.register_page(
     can_edit_callback=lambda: True,
 )
 
+def get_task_opacity(task: tasks.TaskItem):
+    if task.status == 'enabled':
+        return 'opacity-100'
+    else:
+        return 'opacity-50'
+
 
 def create_tasks_overview(
         tasks: list[tasks.TaskItem],
@@ -37,7 +43,8 @@ def create_tasks_overview(
         runs[task.task_idk].sort(key=lambda x: x.scheduled_time)
         # then get latest 5
         task_runs = runs[task.task_idk][-5:]
-        elements.append(html.Div(className='col-auto pb-5 pe-5', children=[
+        base_classes = f'col-auto pb-5 pe-5 {get_task_opacity(task)}'
+        elements.append(html.Div(className=base_classes, children=[
             html.Div(className='row', children=[
                 html.Div(className='col-auto', children=[
                     dcc.Link(
@@ -49,7 +56,7 @@ def create_tasks_overview(
             ]),
             html.Div(className='row', children=[
                 html.Div(className='col-auto', children=[
-                    html.H6('Last Scheduled'),
+                    html.Span('Last Scheduled'),
                 ]),
                 html.Div(className='col-auto', children=[
                     html.P(task_runs[-1:][0].scheduled_time if len(task_runs) > 0 else 'N/A')
@@ -57,10 +64,10 @@ def create_tasks_overview(
             ]),
             html.Div(className='row', children=[
                 html.Div(className='col-auto', children=[
-                    html.H6('Next Scheduled'),
+                    html.Span('Next Scheduled'),
                 ]),
                 html.Div(className='col-auto', children=[
-                    task.get_next_scheduled_time()
+                    task.get_next_scheduled_time() if task.status == 'enabled' else 'Disabled'
                 ])
             ]),
             run_slices_cmp.create_run_slice_row_bunched(
@@ -99,7 +106,7 @@ def create_task_element(
     all_runs = all_runs[-display_count:]
 
     return html.Div(className='row content-row', children=[
-        html.Div(className='col-12', children=[
+        html.Div(className=f'col-12 {get_task_opacity(task)}', children=[
             html.Div(className='row', children=[
                 dcc.Link(
                     task.name,
@@ -111,7 +118,7 @@ def create_task_element(
                 html.P(task.description)
             ]),
             html.Div(className='row', children=[
-                html.H6('Schedule Sets'),
+                html.Span('Schedule Sets'),
                 *[
                     html.Div(s_set.cron_schedule, className='col-auto pe-4')
                     for s_set in task.schedule_sets
@@ -151,7 +158,7 @@ def create_all_task_elements(
         )
 
     max_runs = 500
-    max_per_task = 250
+    max_per_task = 200
     runs_per_task: dict[str, int] = {}
 
     task_elements = []
