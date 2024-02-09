@@ -5,6 +5,7 @@ from datetime import datetime as dt
 from datetime import timedelta as td
 
 import dash
+import dash_table
 from dash import ALL, Input, Output, State, dcc, html
 
 from orcha.core import tasks
