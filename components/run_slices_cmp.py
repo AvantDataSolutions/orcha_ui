@@ -20,7 +20,7 @@ def get_run_slice_css_class(run: tasks.RunItem):
         return 'run-failed'
     elif run.status == 'queued':
         return 'run-queued'
-    elif run.status == 'warning':
+    elif run.status == 'warn':
         return 'run-warning'
     else:
         return 'run-unknown'
