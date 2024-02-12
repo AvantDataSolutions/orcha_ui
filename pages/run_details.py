@@ -173,9 +173,10 @@ def update_runs_dropdown(task_idk):
         task=task,
         since=dt.now() - td(days=2),
         schedule=None
-    )[-50:]
+    )
 
     runs.sort(key=lambda r: r.scheduled_time, reverse=True)
+    runs = runs[:100]
 
     return [
         {
