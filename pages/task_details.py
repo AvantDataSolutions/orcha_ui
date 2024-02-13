@@ -154,6 +154,7 @@ def create_task_element(task: tasks.TaskItem):
             html.Div(className='col-auto', children=[
                 html.H6('Last Active'),
                 html.Div(task.last_active),
+                html.Div(f'({str(dt.now() - task.last_active)})'),
             ]),
         ]),
         html.Div(className='row', children=[
