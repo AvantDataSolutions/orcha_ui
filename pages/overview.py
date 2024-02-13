@@ -205,7 +205,7 @@ def layout(hours: int | None = None):
         html.Div(className='container-fluid', children=[
             html.Div(className='row content-row no-bkg py-0 align-items-center', children=[
                 html.Div(className='col-auto', children=[
-                    'End Time:'
+                    'End Time'
                 ]),
                 html.Div(className='col-auto', children=[
                     dcc.Input(
@@ -215,7 +215,7 @@ def layout(hours: int | None = None):
                     ),
                 ]),
                 html.Div(className='col-auto', children=[
-                    'View Hours:'
+                    'View Hours'
                 ]),
                 html.Div(className='col-auto', children=[
                     dcc.Input(
