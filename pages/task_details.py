@@ -129,19 +129,19 @@ def create_task_element(task: tasks.TaskItem):
         html.Div(className='row', children=[
             html.Div(className='col-auto', children=[
                 html.H6('Task ID'),
-                html.P(task.task_idk),
+                html.Div(task.task_idk),
             ]),
             html.Div(className='col-auto', children=[
                 html.H6('Name'),
-                html.P(task.name),
+                html.Div(task.name),
             ]),
             html.Div(className='col-auto', children=[
                 html.H6('Description'),
-                html.P(task.description),
+                html.Div(task.description),
             ]),
             html.Div(className='col-auto', children=[
                 html.H6('Thread Group'),
-                html.P(task.thread_group),
+                html.Div(task.thread_group),
             ]),
             html.Div(className='col-auto', children=[
                 html.H6('Metadata'),
@@ -149,11 +149,11 @@ def create_task_element(task: tasks.TaskItem):
             ]),
             html.Div(className='col-auto', children=[
                 html.H6('Status'),
-                html.P(task.status),
+                html.Div(task.status),
             ]),
             html.Div(className='col-auto', children=[
                 html.H6('Last Active'),
-                html.P(task.last_active),
+                html.Div(task.last_active),
             ]),
         ]),
         html.Div(className='row', children=[
