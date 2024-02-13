@@ -144,6 +144,10 @@ def create_task_element(task: tasks.TaskItem):
                 html.Div(task.thread_group),
             ]),
             html.Div(className='col-auto', children=[
+                html.H6('Tags'),
+                html.Div(task.task_tags),
+            ]),
+            html.Div(className='col-auto', children=[
                 html.H6('Metadata'),
                 html.Pre(json.dumps(task.task_metadata, indent=4))
             ]),
