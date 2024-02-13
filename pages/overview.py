@@ -205,6 +205,16 @@ def layout(hours: int | None = None):
         html.Div(className='container-fluid', children=[
             html.Div(className='row content-row no-bkg py-0 align-items-center', children=[
                 html.Div(className='col-auto', children=[
+                    'Type'
+                ]),
+                html.Div(className='col-auto', children=[
+                    dcc.Dropdown(
+                        style={'width': '200px'},
+                        id='ov-dd-task-types',
+                        value='all'
+                    ),
+                ]),
+                html.Div(className='col-auto', children=[
                     'End Time'
                 ]),
                 html.Div(className='col-auto', children=[
@@ -280,13 +290,15 @@ def layout(hours: int | None = None):
     Output('ov-end-time', 'value'),
     Output('ov-last-refreshed', 'children'),
     Output('app-location-norefresh', 'search'),
+    Output('ov-dd-task-types', 'options'),
     Input('ov-end-time', 'value'),
     Input('ov-lookback-hours', 'value'),
     Input('ov-refresh-button', 'n_clicks'),
     Input('ov-show-disabled', 'value'),
+    Input('ov-dd-task-types', 'value'),
     prevent_initial_call=True,
 )
-def update_task_list(end_time, lookback_hours, refresh_clicks, show_disabled):
+def update_task_list(end_time, lookback_hours, refresh_clicks, show_disabled, task_type):
     if end_time is None:
         return dash.no_update
     if lookback_hours is None:
@@ -299,6 +311,13 @@ def update_task_list(end_time, lookback_hours, refresh_clicks, show_disabled):
     display_start_time = display_end_time - td(hours=lookback_hours)
 
     all_tasks = tasks.TaskItem.get_all()
+    all_tags:list[str] = ['all']
+    for task in all_tasks:
+        all_tags.extend(task.task_tags)
+
+    # only keep tasks with the selected type
+    if task_type != 'all':
+        all_tasks = [task for task in all_tasks if task_type in task.task_tags]
 
     if 'show_disabled' not in show_disabled:
         all_tasks = [task for task in all_tasks if task.status == 'enabled']
@@ -311,5 +330,6 @@ def update_task_list(end_time, lookback_hours, refresh_clicks, show_disabled):
         ),
         dt.utcnow().strftime('%Y-%m-%dT%H:%M'),
         end_time,
-        '?hours=' + str(lookback_hours)
+        '?hours=' + str(lookback_hours),
+        [{'label': tag, 'value': tag} for tag in set(all_tags)]
     )
