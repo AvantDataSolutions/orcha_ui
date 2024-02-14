@@ -114,7 +114,7 @@ def create_run_detail_rows(run: tasks.RunItem | None):
 
 def layout(run_id: str = ''):
 
-    run = tasks.RunItem.get_by_id(run_id)
+    run = tasks.RunItem.get(run_id)
 
     all_tasks = tasks.TaskItem.get_all()
 
@@ -195,7 +195,7 @@ def update_runs_dropdown(task_idk):
 def update_run_details(run_idk):
     if not run_idk:
         return dash.no_update
-    run = tasks.RunItem.get_by_id(run_idk)
+    run = tasks.RunItem.get(run_idk)
     if run is None:
         return dash.no_update
     return create_run_detail_rows(run)
