@@ -122,6 +122,15 @@ def layout(run_id: str = ''):
 
     task_dropdown_value = run.task_idf if run else ''
 
+    # if the run isn't 'finished' then we want a higher update interval
+    # but if its done then there really isnt anything to update
+    interval_ms = 60000
+    if run is not None:
+        if (run.status == tasks.RunStatus.QUEUED
+                or run.status == tasks.RunStatus.RUNNING
+            ):
+            interval_ms = 3000
+
     top_dropdown_row = html.Div(className='row content-row no-bkg py-0 align-items-center', children=[
         html.Div(className='col-auto', children=[
             html.Span('Select Task')
@@ -140,12 +149,13 @@ def layout(run_id: str = ''):
             dcc.Dropdown(
                 id='rd-runs-dropdown',
                 options=[],
-                value='',
+                value=run_id,
             )
         ])
     ])
 
     return [
+        dcc.Interval(id='rd-update-interval', interval=interval_ms),
         html.Div(className='container-fluid', children=[
             top_dropdown_row,
         ]),
@@ -195,8 +205,9 @@ def update_runs_dropdown(task_idk):
 @dash.callback(
     dash.Output('rd-col-run-details', 'children'),
     dash.Input('rd-runs-dropdown', 'value'),
+    dash.Input('rd-update-interval', 'n_intervals')
 )
-def update_run_details(run_idk):
+def update_run_details(run_idk, n_intervals):
     if not run_idk:
         return dash.no_update
     run = tasks.RunItem.get(run_idk)
