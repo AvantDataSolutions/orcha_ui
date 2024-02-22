@@ -1,3 +1,7 @@
+html, #react-entry-point {
+  background-color: #f3f2f2;
+}
+
 ._dash-loading {
   margin: auto;
   color: transparent;
