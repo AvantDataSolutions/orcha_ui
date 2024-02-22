@@ -171,6 +171,8 @@ def update_runs_dropdown(task_idk):
     if not task_idk:
         return []
     task = tasks.TaskItem.get(task_idk)
+    if task is None:
+        return []
     runs = tasks.RunItem.get_all(
         task=task,
         since=dt.now() - td(days=2),
