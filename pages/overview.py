@@ -272,6 +272,7 @@ def layout(hours: int | None = None):
         ]),
         dcc.Loading(
             id='ov-loading-tasks',
+            className='pt-5',
             children=[
                 html.Div(
                     className='container-fluid',
