@@ -56,6 +56,14 @@ def create_tasks_overview(
             ]),
             html.Div(className='row', children=[
                 html.Div(className='col-auto', children=[
+                    html.Span('Last Active'),
+                ]),
+                html.Div(className='col-auto', children=[
+                    html.P(str(dt.utcnow() - task.last_active))
+                ])
+            ]),
+            html.Div(className='row', children=[
+                html.Div(className='col-auto', children=[
                     html.Span('Last Scheduled'),
                 ]),
                 html.Div(className='col-auto', children=[
