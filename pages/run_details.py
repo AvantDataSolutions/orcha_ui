@@ -41,7 +41,9 @@ def create_run_detail_rows(run: tasks.RunItem | None):
         if run.end_time:
             duration = str(td(seconds=(run.end_time - run.start_time).total_seconds()))
         else:
-            duration = 'In Progress'
+            # add hh:mm:ss to duration
+            duration = f'In Progress ({str(dt.utcnow() - run.start_time)[:-7]})'
+
 
     return [
         html.Div(className='row', children=[
