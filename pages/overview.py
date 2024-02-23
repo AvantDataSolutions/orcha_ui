@@ -39,6 +39,12 @@ def create_tasks_overview(
     ):
     elements = []
     for task in tasks:
+        next_scheduled_text = task.get_next_scheduled_time()
+        if task.status == 'disabled':
+            next_scheduled_text = 'Disabled'
+        elif task.status == 'inactive':
+            next_scheduled_text = 'Inactive'
+
         # sort by scheduled time
         runs[task.task_idk].sort(key=lambda x: x.scheduled_time)
         # then get latest 5
@@ -75,7 +81,7 @@ def create_tasks_overview(
                     html.Span('Next Scheduled'),
                 ]),
                 html.Div(className='col-auto', children=[
-                    task.get_next_scheduled_time() if task.status == 'enabled' else 'Disabled'
+                    next_scheduled_text
                 ])
             ]),
             run_slices_cmp.create_run_slice_row_bunched(
@@ -328,8 +334,13 @@ def update_task_list(end_time, lookback_hours, refresh_clicks, show_disabled, ta
     if task_type != 'all':
         all_tasks = [task for task in all_tasks if task_type in task.task_tags]
 
+    # We still want to show inactive tasks so the user can deal with them
     if 'show_disabled' not in show_disabled:
-        all_tasks = [task for task in all_tasks if task.status == 'enabled']
+        all_tasks = [
+            task
+            for task in all_tasks
+            if task.status != 'disabled' and task.status != 'deleted'
+        ]
 
     return (
         create_all_task_elements(
