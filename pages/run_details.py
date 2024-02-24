@@ -92,7 +92,10 @@ def create_run_detail_rows(run: tasks.RunItem | None):
         html.Div(className='row', children=[
             html.Div(className='col', children=[
                 html.H6('Output'),
-                html.Pre(json.dumps(run.output, indent=4)),
+                html.Pre(
+                    json.dumps(run.output, indent=4),
+                    style={'white-space': 'pre-wrap'}
+                ),
             ]),
         ]),
         html.Div(className='row pt-5', children=[
