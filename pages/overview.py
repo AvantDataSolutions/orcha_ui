@@ -6,7 +6,7 @@ from datetime import timedelta as td
 import dash
 from dash import ALL, Input, Output, dcc, html
 
-from orcha.core import tasks
+from orcha.core import tasks, scheduler
 from orcha_ui.components import run_slices_cmp
 from orcha_ui.credentials import PLOTLY_APP_PATH
 
@@ -37,7 +37,31 @@ def create_tasks_overview(
         tasks: list[tasks.TaskItem],
         runs: dict[str, list[tasks.RunItem]]
     ):
-    elements = []
+    sched_last_active = scheduler.Scheduler.get_last_active()
+    if sched_last_active is None:
+        sched_last_active_text = 'Not Active'
+    else:
+        sched_last_active_text = str(dt.utcnow() - sched_last_active)
+    elements = [
+        html.Div(className='col-auto pb-5 pe-5', children=[
+            html.Div(className='row', children=[
+                html.Div(className='col-auto', children=[
+                    html.Div(
+                        'Scheduler',
+                        className='task-link h5'
+                    )
+                ])
+            ]),
+            html.Div(className='row', children=[
+                html.Div(className='col-auto', children=[
+                    html.Span('Last Active'),
+                ]),
+                html.Div(className='col-auto', children=[
+                    html.P(sched_last_active_text)
+                ])
+            ])
+        ])
+    ]
     for task in tasks:
         next_scheduled_text = task.get_next_scheduled_time()
         if task.status == 'disabled':
