@@ -384,15 +384,15 @@ def create_manual_run(n_clicks, config, task_id, schedule_id):
     for schedule in task.schedule_sets:
         if schedule.set_idk == schedule_id:
             schedule.config = new_config
+            run = tasks.RunItem.create(
+                task=task,
+                run_type='manual',
+                schedule=schedule,
+                scheduled_time=dt.now(),
+            )
+            if run:
+                return 'Manual run created'
             break
-    run = tasks.RunItem.create(
-        task=task,
-        run_type='manual',
-        schedule=task.schedule_sets[0],
-        scheduled_time=dt.now(),
-    )
-    if run:
-        return 'Manual run created'
     else:
         return 'Create Failed'
 
