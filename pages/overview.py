@@ -40,8 +40,13 @@ def create_tasks_overview(
     sched_last_active = scheduler.Scheduler.get_last_active()
     if sched_last_active is None:
         sched_last_active_text = 'Not Active'
+        last_active_class = 'text-danger'
     else:
         sched_last_active_text = str(dt.utcnow() - sched_last_active)
+        if sched_last_active > (dt.utcnow() - td(minutes=2)):
+            last_active_class = 'text-success'
+        else:
+            last_active_class = 'text-danger'
     elements = [
         html.Div(className='col-auto pb-5 pe-5', children=[
             html.Div(className='row', children=[
@@ -57,7 +62,10 @@ def create_tasks_overview(
                     html.Span('Last Active'),
                 ]),
                 html.Div(className='col-auto', children=[
-                    html.P(sched_last_active_text)
+                    html.P(
+                        sched_last_active_text,
+                        className=last_active_class
+                    )
                 ])
             ])
         ])
@@ -68,6 +76,10 @@ def create_tasks_overview(
             next_scheduled_text = 'Disabled'
         elif task.status == 'inactive':
             next_scheduled_text = 'Inactive'
+
+        task_active_class = 'text-success'
+        if task.last_active < (dt.utcnow() - td(minutes=2)):
+            task_active_class = 'text-danger'
 
         # sort by scheduled time
         runs[task.task_idk].sort(key=lambda x: x.scheduled_time)
@@ -89,7 +101,10 @@ def create_tasks_overview(
                     html.Span('Last Active'),
                 ]),
                 html.Div(className='col-auto', children=[
-                    html.P(str(dt.utcnow() - task.last_active))
+                    html.P(
+                        str(dt.utcnow() - task.last_active),
+                        className=task_active_class
+                    )
                 ])
             ]),
             html.Div(className='row', children=[
