@@ -241,6 +241,7 @@ def layout(hours: int | None = None):
 
     return [
         html.Div(className='container-fluid', children=[
+            dcc.Interval(id='ov-refresh-interval', interval=30000),
             html.Div(className='row content-row no-bkg py-0 align-items-center', children=[
                 html.Div(className='col-auto', children=[
                     'Type'
@@ -335,9 +336,13 @@ def layout(hours: int | None = None):
     Input('ov-refresh-button', 'n_clicks'),
     Input('ov-show-disabled', 'value'),
     Input('ov-dd-task-types', 'value'),
+    Input('ov-refresh-interval', 'n_intervals'),
     prevent_initial_call=True,
 )
-def update_task_list(end_time, lookback_hours, refresh_clicks, show_disabled, task_type):
+def update_task_list(
+        end_time, lookback_hours, refresh_clicks,
+        show_disabled, task_type, n_intervals
+    ):
     if end_time is None:
         return dash.no_update
     if lookback_hours is None:
