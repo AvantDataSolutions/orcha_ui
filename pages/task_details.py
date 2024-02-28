@@ -12,6 +12,8 @@ from orcha.core import tasks
 from orcha_ui.components import autoclear_cpm, run_slices_cmp
 from orcha_ui.credentials import PLOTLY_APP_PATH
 
+from orcha_ui.components import modal_cmp
+
 
 def can_read():
     return True
@@ -121,7 +123,14 @@ def create_task_element(task: tasks.TaskItem):
                         html.H4('Task Details'),
                     ]),
                     html.Div(className='col-auto', children=[
-                        toggle_buttton
+                        html.Button(
+                            id='td-btn-fail-unstarted',
+                            className='btn btn-sm btn-warning me-3',
+                            children=[
+                                'Fail Unstarted'
+                            ]
+                        ),
+                        toggle_buttton,
                     ]),
                 ]),
             ]),
@@ -281,10 +290,16 @@ def layout(task_id: str = ''):
             }),
             dcc.Input(className='d-none', id='td-schedule-dropdown'),
             html.Button(className='d-none', id='td-btn-toggle-task'),
+            html.Button(className='d-none', id='td-btn-fail-unstarted'),
+            html.Button(className='d-none', id={
+                'type': modal_cmp.BUTTON_OK_TYPE,
+                'index': 'td-fail-unstarted-modal'
+            }),
         ]
 
     return [
         html.Div(className='container-fluid', children=[
+            html.Div(id='td-div-modal-area'),
             html.Div(className='row content-row no-bkg py-0 align-items-center', children=[
                 html.Div(className='col-auto', children=[
                     html.Div('Select Task')
@@ -360,6 +375,61 @@ def update_config_textarea(schedule_id, task_id):
         'btn btn-primary px-5',
     ]
 
+
+# show fail modal
+@dash.callback(
+    Output('td-div-modal-area', 'children'),
+    Input('td-btn-fail-unstarted', 'n_clicks'),
+    State('td-task-dropdown', 'value'),
+    prevent_initial_call=True,
+)
+def show_fail_modal(n_clicks, task_id):
+    if n_clicks is None:
+        return dash.no_update
+    if dash.ctx.triggered_id == 'td-btn-fail-unstarted':
+        task = tasks.TaskItem.get(task_id)
+        if task is None:
+            run_count = 0
+        else:
+            run_count = len(task.get_queued_runs())
+        return modal_cmp.create_modal(
+            inner_html=html.Div(
+                html.P(
+                    f'Fail {run_count} unstarted runs?',
+                    className='fs-5'
+                )
+            ),
+            outer_style={
+                'background-color': 'white',
+                'padding': '20px',
+                'border-radius': '5px',
+                'border': '1px solid lightgray',
+                'box-shadow': '0px 0px 10px 10px rgba(0, 0, 0, 0.1)',
+            },
+            id_index='td-fail-unstarted-modal',
+            show=True
+        )
+
+# fail all unstarted runs
+@dash.callback(
+    Output({'type': autoclear_cpm.AUTOCLEAR_ID_TYPE, 'index': 'td-out-create-run'}, 'children', allow_duplicate=True),
+    Input({'type': modal_cmp.BUTTON_OK_TYPE, 'index': 'td-fail-unstarted-modal'}, 'n_clicks'),
+    State('td-task-dropdown', 'value'),
+    prevent_initial_call=True,
+)
+def fail_unstarted_runs(ok_clicks, task_id):
+    if ok_clicks is None:
+        return dash.no_update
+    task = tasks.TaskItem.get(task_id)
+    if task is None:
+        return 'No task selected'
+    unstarted_runs = task.get_queued_runs()
+    for run in unstarted_runs:
+        run.set_failed(
+            output={'message': 'Unstarted runs manually failed'},
+            zero_duration=True
+        )
+    return 'Unstarted runs failed'
 
 # create a manual run
 @dash.callback(
