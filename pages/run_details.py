@@ -120,6 +120,27 @@ def create_run_detail_rows(run: tasks.RunItem | None):
     ]
 
 
+def get_run_dropdown_options(task_idk: str):
+    task = tasks.TaskItem.get(task_idk)
+    if task is None:
+        return []
+    runs = tasks.RunItem.get_all(
+        task=task,
+        since=dt.now() - td(days=2),
+        schedule=None
+    )
+
+    runs.sort(key=lambda r: r.scheduled_time, reverse=True)
+    runs = runs[:100]
+
+    return [
+        {
+            'label': f'{r.scheduled_time} - {r.status}',
+            'value': r.run_idk
+        }
+        for r in runs
+    ]
+
 def layout(run_id: str = ''):
 
     run = tasks.RunItem.get(run_id)
@@ -186,32 +207,16 @@ def layout(run_id: str = ''):
 def update_runs_dropdown(task_idk):
     if not task_idk:
         return []
-    task = tasks.TaskItem.get(task_idk)
-    if task is None:
-        return []
-    runs = tasks.RunItem.get_all(
-        task=task,
-        since=dt.now() - td(days=2),
-        schedule=None
-    )
-
-    runs.sort(key=lambda r: r.scheduled_time, reverse=True)
-    runs = runs[:100]
-
-    return [
-        {
-            'label': f'{r.scheduled_time} - {r.status}',
-            'value': r.run_idk
-        }
-        for r in runs
-    ]
-
+    return get_run_dropdown_options(task_idk)
 
 # callback to update run details
 @dash.callback(
     dash.Output('rd-col-run-details', 'children'),
+    dash.Output('app-location-norefresh', 'search', allow_duplicate=True),
+    dash.Output('rd-runs-dropdown', 'options', allow_duplicate=True),
     dash.Input('rd-runs-dropdown', 'value'),
-    dash.Input('rd-update-interval', 'n_intervals')
+    dash.Input('rd-update-interval', 'n_intervals'),
+    prevent_initial_call=True
 )
 def update_run_details(run_idk, n_intervals):
     if not run_idk:
@@ -219,4 +224,9 @@ def update_run_details(run_idk, n_intervals):
     run = tasks.RunItem.get(run_idk)
     if run is None:
         return dash.no_update
-    return create_run_detail_rows(run)
+
+    return [
+        create_run_detail_rows(run),
+        f'?run_id={run_idk}',
+        get_run_dropdown_options(run.task_idf)
+    ]
