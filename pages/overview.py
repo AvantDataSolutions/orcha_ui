@@ -4,7 +4,7 @@ from datetime import datetime as dt
 from datetime import timedelta as td
 
 import dash
-from dash import ALL, Input, Output, dcc, html
+from dash import Input, Output, dcc, html, State
 
 from orcha.core import tasks, scheduler
 from orcha_ui.components import run_slices_cmp
@@ -239,9 +239,11 @@ def create_all_task_elements(
 
     return task_elements
 
-def layout(hours: int | None = None):
-    display_end_time = dt.utcnow()
-
+def layout(hours: int | None = None, end_time: str | None = None):
+    if end_time is None:
+        display_end_time = dt.utcnow()
+    else:
+        display_end_time = dt.strptime(end_time, '%Y-%m-%dT%H:%M')
     if hours is None:
         hours = 6
 
@@ -277,6 +279,13 @@ def layout(hours: int | None = None):
                         id='ov-end-time',
                         type='datetime-local'
                     ),
+                ]),
+                html.Div(className='col-auto g-0', children=[
+                    html.Button(
+                        'Now',
+                        id='ov-button-now',
+                        className='btn btn-primary btn-sm'
+                    )
                 ]),
                 html.Div(className='col-auto', children=[
                     'View Hours'
@@ -317,7 +326,7 @@ def layout(hours: int | None = None):
                             html.Button(
                                 'Refresh',
                                 id='ov-refresh-button',
-                                className='btn btn-primary'
+                                className='btn btn-primary btn-sm'
                             )
                         ])
                     ])
@@ -338,6 +347,37 @@ def layout(hours: int | None = None):
         )
 
     ]
+
+# clicking the now button removes the end time and sets it to now
+# and removes it from the url too
+@dash.callback(
+    Output('ov-end-time', 'value', allow_duplicate=True),
+    Output('app-location-norefresh', 'search', allow_duplicate=True),
+    Input('ov-button-now', 'n_clicks'),
+    State('ov-lookback-hours', 'value'),
+    prevent_initial_call=True
+)
+def set_end_time_to_now(n_clicks, hours):
+    if n_clicks is None:
+        return dash.no_update
+    return (
+        dt.utcnow().strftime('%Y-%m-%dT%H:%M'),
+        f'?hours={str(hours)}'
+    )
+
+# whenever the end time is updated, if its not within the last 10 seconds
+# then disable the refresh button and set the interval to 1 hour
+@dash.callback(
+    Output('ov-refresh-button', 'disabled'),
+    Output('ov-refresh-interval', 'interval'),
+    Input('ov-end-time', 'value'),
+    prevent_initial_call=True
+)
+def update_refresh_button(end_time):
+    if dt.strptime(end_time, '%Y-%m-%dT%H:%M') < (dt.utcnow() - td(minutes=1)):
+        return True, 3600000
+    else:
+        return False, 30000
 
 # populate ov-task-list
 @dash.callback(
@@ -363,8 +403,12 @@ def update_task_list(
     if lookback_hours is None:
         lookback_hours = 6
 
-    if dash.ctx.triggered_id == 'ov-refresh-button':
-        end_time = dt.utcnow().strftime('%Y-%m-%dT%H:%M')
+    # if the end time isn't within the last 10 seconds, then add it to the url
+    # as we're using a static end time
+    if dt.strptime(end_time, '%Y-%m-%dT%H:%M') < (dt.utcnow() - td(minutes=1)):
+        endtime_str = f'&end_time={end_time}'
+    else:
+        endtime_str = ''
 
     display_end_time = dt.strptime(end_time, '%Y-%m-%dT%H:%M')
     display_start_time = display_end_time - td(hours=lookback_hours)
@@ -392,8 +436,8 @@ def update_task_list(
             display_start_time=display_start_time,
             display_end_time=display_end_time
         ),
-        dt.utcnow().strftime('%Y-%m-%dT%H:%M'),
         end_time,
-        '?hours=' + str(lookback_hours),
+        dt.utcnow().strftime('%Y-%m-%dT%H:%M'),
+        f'?hours={str(lookback_hours)}{endtime_str}',
         [{'label': tag, 'value': tag} for tag in set(all_tags)]
     )
