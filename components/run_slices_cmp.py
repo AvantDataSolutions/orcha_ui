@@ -74,6 +74,17 @@ def create_run_slice_row(
             start_time = run.start_time
         if run.end_time is not None:
             end_time = run.end_time
+        # if the run is done and we don't have an end time
+        # then set duration to ~zero (e.g. end = start/scheduled time)
+        elif run.status in [
+                tasks.RunStatus.WARN,
+                tasks.RunStatus.FAILED,
+                tasks.RunStatus.SUCCESS
+            ]:
+            if run.start_time is not None:
+                end_time = run.start_time
+            else:
+                end_time = start_time
 
         run_duration = end_time - start_time
         run_duration_in_hours = run_duration.total_seconds() / 3600
