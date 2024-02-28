@@ -44,44 +44,57 @@ def create_run_detail_rows(run: tasks.RunItem | None):
             # add hh:mm:ss to duration
             duration = f'In Progress ({str(dt.utcnow() - run.start_time)[:-7]})'
 
+    schedule_div = ''
+    if run.run_type == 'scheduled':
+        s_set = None
+        for s in run._task.schedule_sets:
+            if s.set_idk == run.set_idf:
+                s_set = s
+                break
+        if s_set:
+            schedule_div = html.Div(className='col', children=[
+                html.H6('Schedule'),
+                html.P(s_set.cron_schedule)
+            ])
 
     return [
         html.Div(className='row', children=[
-            html.Div(className='col', children=[
+            html.Div(className='col-auto me-2', children=[
                 html.H6('Run ID'),
                 html.P(run.run_idk),
             ]),
-            html.Div(className='col', children=[
+            html.Div(className='col-auto me-2', children=[
                 html.H6('Scheduled Time'),
                 html.P(run.scheduled_time),
             ]),
-            html.Div(className='col', children=[
+            html.Div(className='col-auto me-2', children=[
                 html.H6('Start Time'),
                 html.P(run.start_time),
             ]),
-            html.Div(className='col', children=[
+            html.Div(className='col-auto me-2', children=[
                 html.H6('End Time'),
                 html.P(run.end_time),
             ]),
-            html.Div(className='col', children=[
+            html.Div(className='col-auto me-2', children=[
                 html.H6('Duration'),
                 html.P(duration),
             ]),
-            html.Div(className='col', children=[
+            html.Div(className='col-auto me-2', children=[
                 html.H6('Last Active'),
                 html.Div(
                     f'{run.last_active.strftime("%Y-%m-%d %H:%M:%S")} \
                     ({str(dt.now() - run.last_active)[:-7]})'
                 ) if run.last_active else '',
             ]) if run.status == 'running' else '',
-            html.Div(className='col', children=[
+            html.Div(className='col-auto me-2', children=[
                 html.H6('Status'),
                 html.P(run.status),
             ]),
-            html.Div(className='col', children=[
+            html.Div(className='col-auto me-2', children=[
                 html.H6('Type'),
                 html.P(run.run_type),
             ]),
+            schedule_div,
         ]),
         html.Div(className='row', children=[
             html.Div(className='col', children=[
