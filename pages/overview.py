@@ -38,15 +38,26 @@ def create_tasks_overview(
         runs: dict[str, list[tasks.RunItem]]
     ):
     sched_last_active = scheduler.Scheduler.get_last_active()
+    sched_loaded_at = scheduler.Scheduler.get_loaded_at()
+
     if sched_last_active is None:
         sched_last_active_text = 'Not Active'
         last_active_class = 'text-danger'
+        uptime = 'Not Active'
     else:
         sched_last_active_text = str(dt.utcnow() - sched_last_active)
         if sched_last_active > (dt.utcnow() - td(minutes=2)):
             last_active_class = 'text-success'
         else:
             last_active_class = 'text-danger'
+
+        if sched_loaded_at is None:
+            uptime = 'Not Active'
+            uptime_class = 'text-danger'
+        else:
+            uptime = str(dt.utcnow() - sched_loaded_at)
+            uptime_class = 'text-success'
+
     elements = [
         html.Div(className='col-auto pb-5 pe-5', children=[
             html.Div(className='row', children=[
@@ -54,6 +65,17 @@ def create_tasks_overview(
                     html.Div(
                         'Scheduler',
                         className='task-link h5'
+                    )
+                ])
+            ]),
+            html.Div(className='row', children=[
+                html.Div(className='col-auto', children=[
+                    html.Span('Uptime'),
+                ]),
+                html.Div(className='col-auto', children=[
+                    html.P(
+                        uptime,
+                        className=uptime_class
                     )
                 ])
             ]),
