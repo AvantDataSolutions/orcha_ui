@@ -7,7 +7,7 @@ import dash
 from dash import Input, Output, dcc, html, State
 
 from orcha.core import tasks, scheduler
-from orcha_ui.components import run_slices_cmp
+from orcha_ui.components import run_slices_cmp, collapsible_div_cmp
 from orcha_ui.credentials import PLOTLY_APP_PATH
 
 
@@ -250,13 +250,33 @@ def create_all_task_elements(
         for task_idk, runs in task_runs.items():
             runs_per_task[task_idk] = min(int(len(runs) * max_runs / total_runs), max_per_task)
 
+    # Order the tasks by workspace name
+    all_tasks.sort(key=lambda x: x.task_metadata.get('workspace', 'Other'))
+    all_workspaces = ['No Workspace']
     for task in all_tasks:
-        task_elements.append(create_task_element(
-            task=task,
-            all_runs=task_runs[task.task_idk],
-            display_count=runs_per_task.get(task.task_idk, 100),
-            display_start_time=display_start_time,
-            display_end_time=display_end_time
+        workspace = task.task_metadata.get('workspace', 'No Workspace')
+        if workspace not in all_workspaces:
+            all_workspaces.append(workspace)
+
+    for workspace in all_workspaces:
+        workspace_tasks = [
+            task for task in all_tasks
+            if workspace == task.task_metadata.get('workspace', 'No Workspace')
+        ]
+        workspace_elements = [
+            create_task_element(
+                task=task,
+                all_runs=task_runs[task.task_idk],
+                display_count=runs_per_task.get(task.task_idk, 100),
+                display_start_time=display_start_time,
+                display_end_time=display_end_time
+            )
+            for task in workspace_tasks
+        ]
+        task_elements.append(collapsible_div_cmp.create_collapsible_container(
+            children=workspace_elements,
+            title=workspace,
+            className='pt-3 pb-1 border-bottom'
         ))
 
     return task_elements
