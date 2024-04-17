@@ -45,8 +45,8 @@ def create_tasks_overview(
         last_active_class = 'text-danger'
         uptime = 'Not Active'
     else:
-        sched_last_active_text = str(dt.utcnow() - sched_last_active)
-        if sched_last_active > (dt.utcnow() - td(minutes=2)):
+        sched_last_active_text = str(dt.now() - sched_last_active)
+        if sched_last_active > (dt.now() - td(minutes=2)):
             last_active_class = 'text-success'
         else:
             last_active_class = 'text-danger'
@@ -55,7 +55,7 @@ def create_tasks_overview(
             uptime = 'Not Active'
             uptime_class = 'text-danger'
         else:
-            uptime = str(dt.utcnow() - sched_loaded_at)
+            uptime = str(dt.now() - sched_loaded_at)
             uptime_class = 'text-success'
 
     elements = [
@@ -100,7 +100,7 @@ def create_tasks_overview(
             next_scheduled_text = 'Inactive'
 
         task_active_class = 'text-success'
-        if task.last_active < (dt.utcnow() - td(minutes=2)):
+        if task.last_active < (dt.now() - td(minutes=2)):
             task_active_class = 'text-danger'
 
         # sort by scheduled time
@@ -124,7 +124,7 @@ def create_tasks_overview(
                 ]),
                 html.Div(className='col-auto', children=[
                     html.P(
-                        str(dt.utcnow() - task.last_active),
+                        str(dt.now() - task.last_active),
                         className=task_active_class
                     )
                 ])
@@ -229,7 +229,7 @@ def create_all_task_elements(
         task_runs[task.task_idk] = tasks.RunItem.get_all(
             task=task,
             schedule=None,
-            since=(dt.utcnow() - td(days=10))
+            since=(dt.now() - td(days=10))
         )
 
     max_runs = 500
@@ -283,7 +283,7 @@ def create_all_task_elements(
 
 def layout(hours: int | None = None, end_time: str | None = None):
     if end_time is None:
-        display_end_time = dt.utcnow()
+        display_end_time = dt.now()
     else:
         display_end_time = dt.strptime(end_time, '%Y-%m-%dT%H:%M')
     if hours is None:
@@ -359,7 +359,7 @@ def layout(hours: int | None = None, end_time: str | None = None):
                         ]),
                         html.Div(className='col-auto g-0 refresh-time', children=[
                             html.Span(
-                                dt.utcnow().strftime('%Y-%m-%dT%H:%M'),
+                                dt.now().strftime('%Y-%m-%dT%H:%M'),
                                 id='ov-last-refreshed',
                                 className=''
                             )
@@ -403,7 +403,7 @@ def set_end_time_to_now(n_clicks, hours):
     if n_clicks is None:
         return dash.no_update
     return (
-        dt.utcnow().strftime('%Y-%m-%dT%H:%M'),
+        dt.now().strftime('%Y-%m-%dT%H:%M'),
         f'?hours={str(hours)}'
     )
 
@@ -416,7 +416,7 @@ def set_end_time_to_now(n_clicks, hours):
     prevent_initial_call=True
 )
 def update_refresh_button(end_time):
-    if dt.strptime(end_time, '%Y-%m-%dT%H:%M') < (dt.utcnow() - td(minutes=1)):
+    if dt.strptime(end_time, '%Y-%m-%dT%H:%M') < (dt.now() - td(minutes=1)):
         return True, 3600000
     else:
         return False, 30000
@@ -447,7 +447,7 @@ def update_task_list(
 
     # if the end time isn't within the last 10 seconds, then add it to the url
     # as we're using a static end time
-    if dt.strptime(end_time, '%Y-%m-%dT%H:%M') < (dt.utcnow() - td(minutes=1)):
+    if dt.strptime(end_time, '%Y-%m-%dT%H:%M') < (dt.now() - td(minutes=1)):
         endtime_str = f'&end_time={end_time}'
     else:
         endtime_str = ''
@@ -479,7 +479,7 @@ def update_task_list(
             display_end_time=display_end_time
         ),
         end_time,
-        dt.utcnow().strftime('%Y-%m-%dT%H:%M'),
+        dt.now().strftime('%Y-%m-%dT%H:%M'),
         f'?hours={str(lookback_hours)}{endtime_str}',
         [{'label': tag, 'value': tag} for tag in set(all_tags)]
     )

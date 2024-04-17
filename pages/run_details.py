@@ -42,7 +42,7 @@ def create_run_detail_rows(run: tasks.RunItem | None):
             duration = str(td(seconds=(run.end_time - run.start_time).total_seconds()))
         else:
             # add hh:mm:ss to duration
-            duration = f'In Progress ({str(dt.utcnow() - run.start_time)[:-7]})'
+            duration = f'In Progress ({str(dt.now() - run.start_time)[:-7]})'
 
     schedule_div = ''
     if run.run_type == 'scheduled':
