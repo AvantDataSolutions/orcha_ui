@@ -8,6 +8,7 @@ import dash
 from dash import dcc, html
 
 from orcha.core import tasks
+from orcha_ui.components import modal_cmp
 from orcha_ui.credentials import PLOTLY_APP_PATH
 
 
@@ -199,7 +200,45 @@ def layout(run_id: str = ''):
         html.Div(className='container-fluid', children=[
             top_dropdown_row,
         ]),
+        modal_cmp.create_modal(
+            inner_html=html.Div(
+                html.P(
+                    'Cancel current run?',
+                    className='fs-5'
+                )
+            ),
+            outer_style={
+                'background-color': 'white',
+                'padding': '20px',
+                'border-radius': '5px',
+                'border': '1px solid lightgray',
+                'box-shadow': '0px 0px 10px 10px rgba(0, 0, 0, 0.1)',
+            },
+            id_index='rd-cancel-run-modal',
+            show=False
+        ),
         html.Div(className='container-fluid', children=[
+            html.Div(className='row', children=[
+            html.Div(className='col-12 border-bottom mb-2 ', children=[
+                    html.Div(className='row justify-content-between', children=[
+                        html.Div(className='col-auto', children=[
+                            html.H4('Run Details'),
+                        ]),
+                        html.Div(className='col-auto', children=[
+                            html.Button(
+                                id={
+                                    'type': modal_cmp.BUTTON_SHOW_TYPE,
+                                    'index': 'rd-cancel-run-modal'
+                                },
+                                className='btn btn-sm btn-warning me-3',
+                                children=[
+                                    'Cancel Run'
+                                ]
+                            )
+                        ]),
+                    ]),
+                ]),
+            ]),
             html.Div(className='row content-row', children=[
                 html.Div(className='col-12', children=[
                     html.H4('Run Details', className='border-bottom pb-2'),
@@ -224,7 +263,7 @@ def update_runs_dropdown(task_idk):
 
 # callback to update run details
 @dash.callback(
-    dash.Output('rd-col-run-details', 'children'),
+    dash.Output('rd-col-run-details', 'children', allow_duplicate=True),
     dash.Output('app-location-norefresh', 'search', allow_duplicate=True),
     dash.Output('rd-runs-dropdown', 'options', allow_duplicate=True),
     dash.Input('rd-runs-dropdown', 'value'),
@@ -238,6 +277,34 @@ def update_run_details(run_idk, n_intervals):
     if run is None:
         return dash.no_update
 
+    return [
+        create_run_detail_rows(run),
+        f'?run_id={run_idk}',
+        get_run_dropdown_options(run.task_idf)
+    ]
+
+
+# Callback to cancel the current run
+@dash.callback(
+    dash.Output('rd-col-run-details', 'children', allow_duplicate=True),
+    dash.Output('app-location-norefresh', 'search', allow_duplicate=True),
+    dash.Output('rd-runs-dropdown', 'options', allow_duplicate=True),
+    dash.Input({'type': modal_cmp.BUTTON_OK_TYPE, 'index': 'rd-cancel-run-modal'}, 'n_clicks'),
+    dash.State('rd-runs-dropdown', 'value'),
+    prevent_initial_call=True
+)
+def cancel_run(n_clicks, run_idk):
+    if n_clicks is None:
+        return dash.no_update
+    if dash.ctx.triggered_id is None:
+        return dash.no_update
+    run = tasks.RunItem.get(run_idk)
+    if run is None:
+        return dash.no_update
+
+    run.set_cancelled(output={
+        'message': 'Run was cancelled by user.'
+    })
     return [
         create_run_detail_rows(run),
         f'?run_id={run_idk}',
