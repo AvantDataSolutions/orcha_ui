@@ -2,7 +2,10 @@ import dash
 from dash import MATCH, Input, Output, html
 
 BUTTON_OK_TYPE = 'cmp-mdl-btn-ok'
-BUTTON_CANCEL_KEY = 'cmp-mdl-btn-cancel'
+BUTTON_CANCEL_TYPE = 'cmp-mdl-btn-cancel'
+BUTTON_SHOW_TYPE = 'cmp-mdl-btn-show'
+
+MODAL_DIV_CLASSES = 'position-fixed top-50 start-50 translate-middle wf-root w-auto'
 
 def create_modal(
         inner_html: html.Div,
@@ -10,7 +13,7 @@ def create_modal(
         outer_style: dict = {},
         show = True
     ):
-    class_str = 'position-fixed top-50 start-50 translate-middle wf-root w-auto'
+    class_str = MODAL_DIV_CLASSES
     if not show:
         class_str += ' d-none'
 
@@ -36,7 +39,7 @@ def _create_outer_div(
                 style={'width': '5rem'}
             ),
             html.Div(className='col-1'),
-            html.Button('Cancel', id={'type': BUTTON_CANCEL_KEY, 'index': id_index},
+            html.Button('Cancel', id={'type': BUTTON_CANCEL_TYPE, 'index': id_index},
                 className='btn btn-secondary button-sm',
                 style={'width': '5rem'}
             )
@@ -53,7 +56,23 @@ async function(ok_clicks, cancel_clicks) {
     return 'd-none';
 }
 ''',
-Output({'type': 'cmp-mdl-div-root', 'index': MATCH}, 'className'),
+Output({'type': 'cmp-mdl-div-root', 'index': MATCH}, 'className', allow_duplicate=True),
 Input({'type': BUTTON_OK_TYPE, 'index': MATCH}, 'n_clicks'),
-Input({'type': BUTTON_CANCEL_KEY, 'index': MATCH}, 'n_clicks'),
+Input({'type': BUTTON_CANCEL_TYPE, 'index': MATCH}, 'n_clicks'),
+prevent_initial_call=True
+)
+
+# client side callback to show the modal by restoring the original classes
+dash.clientside_callback(
+'''
+async function(ok_clicks, cancel_clicks) {
+    if(ok_clicks == undefined && cancel_clicks == undefined) {
+        return dash_clientside.no_update;
+    }
+    return 'position-fixed top-50 start-50 translate-middle wf-root w-auto';
+}
+''',
+Output({'type': 'cmp-mdl-div-root', 'index': MATCH}, 'className', allow_duplicate=True),
+Input({'type': BUTTON_SHOW_TYPE, 'index': MATCH}, 'n_clicks'),
+prevent_initial_call=True
 )
