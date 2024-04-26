@@ -59,6 +59,58 @@ def create_run_detail_rows(run: tasks.RunItem | None):
             ])
 
     return [
+        html.Div(className='row mb-1 border-bottom', children=[
+            html.Div(className='col', children=[
+                html.H4('Parent Task'),
+            ]),
+            html.Div(className='col-auto', children=[
+                html.Button(
+                    id={
+                        'type': 'rd-btn-go-to-task',
+                        'index': run.task_idf
+                    },
+                    className='btn btn-sm btn-primary me-3',
+                    children=[
+                        'Go to Task'
+                    ]
+                )
+            ]),
+        ]),
+        html.Div(className='row', children=[
+            html.Div(className='col', children=[
+                html.H6('Name'),
+                html.P(run._task.name),
+            ]),
+            html.Div(className='col', children=[
+                html.H6('Description'),
+                html.P(run._task.description),
+            ]),
+            html.Div(className='col', children=[
+                html.H6('Status'),
+                html.P(run._task.status),
+            ]),
+        ]),
+        html.Div(className='row', children=[
+            html.Div(className='col-12 border-bottom mb-2 ', children=[
+                html.Div(className='row justify-content-between', children=[
+                    html.Div(className='col-auto', children=[
+                        html.H4('Run Details'),
+                    ]),
+                    html.Div(className='col-auto', children=[
+                        html.Button(
+                            id={
+                                'type': modal_cmp.BUTTON_SHOW_TYPE,
+                                'index': 'rd-cancel-run-modal'
+                            },
+                            className='btn btn-sm btn-warning me-3',
+                            children=[
+                                'Cancel Run'
+                            ]
+                        )
+                    ]),
+                ]),
+            ]),
+        ]),
         html.Div(className='row', children=[
             html.Div(className='col-auto me-2', children=[
                 html.H6('Run ID'),
@@ -112,25 +164,6 @@ def create_run_detail_rows(run: tasks.RunItem | None):
                 ),
             ]),
         ]),
-        html.Div(className='row pt-5', children=[
-            html.Div(className='col-12', children=[
-                html.H4('Parent Task', className='border-bottom pb-2'),
-            ])
-        ]),
-        html.Div(className='row', children=[
-            html.Div(className='col', children=[
-                html.H6('Name'),
-                html.P(run._task.name),
-            ]),
-            html.Div(className='col', children=[
-                html.H6('Description'),
-                html.P(run._task.description),
-            ]),
-            html.Div(className='col', children=[
-                html.H6('Status'),
-                html.P(run._task.status),
-            ]),
-        ])
     ]
 
 
@@ -218,39 +251,34 @@ def layout(run_id: str = ''):
             show=False
         ),
         html.Div(className='container-fluid', children=[
-            html.Div(className='row', children=[
-            html.Div(className='col-12 border-bottom mb-2 ', children=[
-                    html.Div(className='row justify-content-between', children=[
-                        html.Div(className='col-auto', children=[
-                            html.H4('Run Details'),
-                        ]),
-                        html.Div(className='col-auto', children=[
-                            html.Button(
-                                id={
-                                    'type': modal_cmp.BUTTON_SHOW_TYPE,
-                                    'index': 'rd-cancel-run-modal'
-                                },
-                                className='btn btn-sm btn-warning me-3',
-                                children=[
-                                    'Cancel Run'
-                                ]
-                            )
-                        ]),
-                    ]),
-                ]),
-            ]),
             html.Div(className='row content-row', children=[
                 html.Div(className='col-12', children=[
-                    html.H4('Run Details', className='border-bottom pb-2'),
-                ]) if run else '',
-                html.Div(
-                    id='rd-col-run-details',
-                    className='col-12',
-                    children=create_run_detail_rows(run)
-                )
+                    html.Div(className='row', children=[
+                        html.Div(
+                            id='rd-col-run-details',
+                            className='col-12',
+                            children=create_run_detail_rows(run)
+                        )
+                    ]),
+                ])
             ]),
         ])
     ]
+
+# go to parent task callback
+@dash.callback(
+    dash.Output('app-location', 'pathname', allow_duplicate=True),
+    dash.Output('app-location', 'search', allow_duplicate=True),
+    dash.Input({'type': 'rd-btn-go-to-task', 'index': dash.ALL}, 'n_clicks'),
+    prevent_initial_call=True
+)
+def go_to_task(n_clicks):
+    if all(v is None for v in n_clicks):
+        return dash.no_update
+    if dash.ctx.triggered_id is None:
+        return dash.no_update
+    task_idk = dash.ctx.triggered_id['index']
+    return '/task_details', f'?task_id={task_idk}'
 
 @dash.callback(
     dash.Output('rd-runs-dropdown', 'options'),
