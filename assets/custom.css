@@ -117,6 +117,14 @@ html, .main-page {
     cursor: pointer;
 }
 
+.run-cancelled {
+    background-color: grey;
+    color: grey;
+    margin: 0;
+    border-right: 1px solid black;
+    cursor: pointer;
+}
+
 /* Run status slice tooltips */
 .c-tooltip {
     position: relative;
