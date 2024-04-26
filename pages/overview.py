@@ -107,6 +107,7 @@ def create_tasks_overview(
         runs[task.task_idk].sort(key=lambda x: x.scheduled_time)
         # then get latest 5
         task_runs = runs[task.task_idk][-5:]
+        active_runs = task.get_running_runs()
         base_classes = f'col-auto pb-5 pe-5 {get_task_opacity(task)}'
         elements.append(html.Div(className=base_classes, children=[
             html.Div(className='row', children=[
@@ -146,6 +147,17 @@ def create_tasks_overview(
                 ])
             ]),
             run_slices_cmp.create_run_slice_row_bunched(
+                title_div=html.Div(
+                    'Active Runs',
+                    style={'width': '100px'},
+                ),
+                task_runs=active_runs
+            ),
+            run_slices_cmp.create_run_slice_row_bunched(
+                title_div=html.Div(
+                    'Recent Runs',
+                    style={'width': '100px', 'font-weight': 600},
+                ),
                 task_runs=task_runs
             ),
         ]))
