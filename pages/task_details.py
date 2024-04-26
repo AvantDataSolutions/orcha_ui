@@ -124,10 +124,10 @@ def create_task_element(task: tasks.TaskItem):
                     ]),
                     html.Div(className='col-auto', children=[
                         html.Button(
-                            id='td-btn-fail-unstarted',
+                            id='td-btn-cancel-unstarted',
                             className='btn btn-sm btn-warning me-3',
                             children=[
-                                'Fail Unstarted'
+                                'Cancel Unstarted'
                             ]
                         ),
                         toggle_buttton,
@@ -290,10 +290,10 @@ def layout(task_id: str = ''):
             }),
             dcc.Input(className='d-none', id='td-schedule-dropdown'),
             html.Button(className='d-none', id='td-btn-toggle-task'),
-            html.Button(className='d-none', id='td-btn-fail-unstarted'),
+            html.Button(className='d-none', id='td-btn-cancel-unstarted'),
             html.Button(className='d-none', id={
                 'type': modal_cmp.BUTTON_OK_TYPE,
-                'index': 'td-fail-unstarted-modal'
+                'index': 'td-cancel-unstarted-modal'
             }),
         ]
 
@@ -379,14 +379,14 @@ def update_config_textarea(schedule_id, task_id):
 # show fail modal
 @dash.callback(
     Output('td-div-modal-area', 'children'),
-    Input('td-btn-fail-unstarted', 'n_clicks'),
+    Input('td-btn-cancel-unstarted', 'n_clicks'),
     State('td-task-dropdown', 'value'),
     prevent_initial_call=True,
 )
-def show_fail_modal(n_clicks, task_id):
+def show_cancel_modal(n_clicks, task_id):
     if n_clicks is None:
         return dash.no_update
-    if dash.ctx.triggered_id == 'td-btn-fail-unstarted':
+    if dash.ctx.triggered_id == 'td-btn-cancel-unstarted':
         task = tasks.TaskItem.get(task_id)
         if task is None:
             run_count = 0
@@ -395,7 +395,7 @@ def show_fail_modal(n_clicks, task_id):
         return modal_cmp.create_modal(
             inner_html=html.Div(
                 html.P(
-                    f'Fail {run_count} unstarted runs?',
+                    f'Cancel {run_count} unstarted runs?',
                     className='fs-5'
                 )
             ),
@@ -406,18 +406,18 @@ def show_fail_modal(n_clicks, task_id):
                 'border': '1px solid lightgray',
                 'box-shadow': '0px 0px 10px 10px rgba(0, 0, 0, 0.1)',
             },
-            id_index='td-fail-unstarted-modal',
+            id_index='td-cancel-unstarted-modal',
             show=True
         )
 
-# fail all unstarted runs
+# cancel all unstarted runs
 @dash.callback(
     Output({'type': autoclear_cpm.AUTOCLEAR_ID_TYPE, 'index': 'td-out-create-run'}, 'children', allow_duplicate=True),
-    Input({'type': modal_cmp.BUTTON_OK_TYPE, 'index': 'td-fail-unstarted-modal'}, 'n_clicks'),
+    Input({'type': modal_cmp.BUTTON_OK_TYPE, 'index': 'td-cancel-unstarted-modal'}, 'n_clicks'),
     State('td-task-dropdown', 'value'),
     prevent_initial_call=True,
 )
-def fail_unstarted_runs(ok_clicks, task_id):
+def cancel_unstarted_runs(ok_clicks, task_id):
     if ok_clicks is None:
         return dash.no_update
     task = tasks.TaskItem.get(task_id)
@@ -425,11 +425,11 @@ def fail_unstarted_runs(ok_clicks, task_id):
         return 'No task selected'
     unstarted_runs = task.get_queued_runs()
     for run in unstarted_runs:
-        run.set_failed(
-            output={'message': 'Unstarted runs manually failed'},
+        run.set_cancelled(
+            output={'message': 'Unstarted runs manually cancelled'},
             zero_duration=True
         )
-    return 'Unstarted runs failed'
+    return 'Unstarted runs cancelled'
 
 # create a manual run
 @dash.callback(
