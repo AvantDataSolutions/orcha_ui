@@ -22,18 +22,23 @@ def get_run_slice_css_class(run: tasks.RunItem):
         return 'run-queued'
     elif run.status == 'warn':
         return 'run-warning'
+    elif run.status == 'cancelled':
+        return 'run-cancelled'
     else:
         return 'run-unknown'
 
 
-def create_run_slice_row_bunched(task_runs: list[tasks.RunItem]):
+def create_run_slice_row_bunched(
+        title_div: html.Div,
+        task_runs: list[tasks.RunItem]
+    ):
     """
     Creates a row of run slices for a task without spacing between runs
     based on time between runs. Useful for 'last 5 runs' etc.
     """
     return html.Div(className='row', children=[
         html.Div(className='col-auto', children=[
-            html.H6('Recent Runs')
+            title_div
         ]),
         html.Div(className='col-auto', children=[
             html.Div(
