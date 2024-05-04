@@ -390,7 +390,7 @@ def layout(
                 html.Div(className='col', children=[
                     html.Div(className='row justify-content-end align-items-center', children=[
                         # add a last refreshed time
-                        html.Div(className='col-auto g-0 pe-1 refresh-time', children=[
+                        html.Div(className='col-auto g-0 me-3 refresh-time', children=[
                             html.Div('Last Refreshed: ', className='row'),
                             html.Span(
                                 dt.now().strftime('%Y-%m-%dT%H:%M'),
