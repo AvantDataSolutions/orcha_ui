@@ -293,13 +293,28 @@ def create_all_task_elements(
 
     return task_elements
 
-def layout(hours: int | None = None, end_time: str | None = None):
+def layout(
+        hours: int | None = None,
+        types: str | None = None,
+        workspaces: str | None = None,
+        end_time: str | None = None,
+    ):
     if end_time is None:
         display_end_time = dt.now()
     else:
         display_end_time = dt.strptime(end_time, '%Y-%m-%dT%H:%M')
     if hours is None:
         hours = 6
+
+    if types is None:
+        selected_types = ['all']
+    else:
+        selected_types = types.split(',')
+
+    if workspaces is None:
+        selected_workspaces = ['All Workspaces']
+    else:
+        selected_workspaces = workspaces.split(',')
 
     try:
         hours = int(hours)
@@ -313,15 +328,23 @@ def layout(hours: int | None = None, end_time: str | None = None):
     return [
         html.Div(className='container-fluid', children=[
             dcc.Interval(id='ov-refresh-interval', interval=30000),
-            html.Div(className='row content-row no-bkg py-0 align-items-center', children=[
+            html.Div(className='row content-row no-bkg py-0 mt-0 align-items-center', children=[
                 html.Div(className='col-auto', children=[
-                    'Type'
+                    html.Label('Workspaces', style={'font-weight': 'normal'}),
+                    dcc.Dropdown(
+                        style={'width': '200px'},
+                        id='ov-dd-task-workspaces',
+                        value=selected_workspaces,
+                        multi=True
+                    ),
                 ]),
                 html.Div(className='col-auto', children=[
+                    html.Label('Task Types', style={'font-weight': 'normal'}),
                     dcc.Dropdown(
                         style={'width': '200px'},
                         id='ov-dd-task-types',
-                        value='all'
+                        value=selected_types,
+                        multi=True
                     ),
                 ]),
                 html.Div(className='col-auto', children=[
@@ -348,7 +371,8 @@ def layout(hours: int | None = None, end_time: str | None = None):
                     dcc.Input(
                         value=hours,
                         id='ov-lookback-hours',
-                        type='number'
+                        type='number',
+                        style={'width': '80px'}
                     ),
                 ]),
                 # toggle to show disabled tasks
@@ -367,14 +391,15 @@ def layout(hours: int | None = None, end_time: str | None = None):
                     html.Div(className='row justify-content-end align-items-center', children=[
                         # add a last refreshed time
                         html.Div(className='col-auto g-0 pe-1 refresh-time', children=[
-                            'Last Refreshed:'
-                        ]),
-                        html.Div(className='col-auto g-0 refresh-time', children=[
+                            html.Div('Last Refreshed: ', className='row'),
                             html.Span(
                                 dt.now().strftime('%Y-%m-%dT%H:%M'),
                                 id='ov-last-refreshed',
-                                className=''
+                                className='row'
                             )
+                        ]),
+                        html.Div(className='col-auto g-0 refresh-time', children=[
+
                         ]),
                         html.Div(className='col-auto', children=[
                             html.Button(
@@ -440,17 +465,19 @@ def update_refresh_button(end_time):
     Output('ov-last-refreshed', 'children'),
     Output('app-location-norefresh', 'search'),
     Output('ov-dd-task-types', 'options'),
+    Output('ov-dd-task-workspaces', 'options'),
     Input('ov-end-time', 'value'),
     Input('ov-lookback-hours', 'value'),
     Input('ov-refresh-button', 'n_clicks'),
     Input('ov-show-disabled', 'value'),
     Input('ov-dd-task-types', 'value'),
+    Input('ov-dd-task-workspaces', 'value'),
     Input('ov-refresh-interval', 'n_intervals'),
     prevent_initial_call=True,
 )
 def update_task_list(
         end_time, lookback_hours, refresh_clicks,
-        show_disabled, task_type, n_intervals
+        show_disabled, task_types, workspaces, n_intervals
     ):
     if end_time is None:
         return dash.no_update
@@ -473,25 +500,59 @@ def update_task_list(
         all_tags.extend(task.task_tags)
 
     # only keep tasks with the selected type
-    if task_type != 'all':
-        all_tasks = [task for task in all_tasks if task_type in task.task_tags]
+    filtered_tasks = set()
+    if 'all' not in task_types:
+        for task in all_tasks:
+            for tag in task.task_tags:
+                if tag in task_types:
+                    filtered_tasks.add(task)
+                    break
+    else:
+        filtered_tasks = all_tasks
+
+    if not workspaces:
+        workspaces = ['All Workspaces']
+
+    all_workspaces = set()
+    all_workspaces.add('All Workspaces')
+    # Loop through all tasks to get all workspaces
+    for task in all_tasks:
+        workspace = task.task_metadata.get('workspace', 'No Workspace')
+        if workspace not in all_workspaces:
+            all_workspaces.add(workspace)
+    # but need to further filter down the filtered tasks list
+    if 'All Workspaces' not in workspaces:
+        filtered_tasks = [
+            task
+            for task in filtered_tasks
+            if task.task_metadata.get('workspace', 'No Workspace') in workspaces
+        ]
 
     # We still want to show inactive tasks so the user can deal with them
     if 'show_disabled' not in show_disabled:
-        all_tasks = [
+        filtered_tasks = [
             task
-            for task in all_tasks
+            for task in filtered_tasks
             if task.status != 'disabled' and task.status != 'deleted'
         ]
 
+    # calculate the url string separately to make it easier to read
+    hours_str = f'&hours={str(lookback_hours)}'
+    types_str = '&types='
+    types_str += ','.join(task_types) if task_types else 'all'
+    workspace_str = '&workspaces='
+    workspace_str += ','.join(workspaces) if workspaces else 'No Workspace'
+
+
     return (
         create_all_task_elements(
-            all_tasks=all_tasks,
+            all_tasks=list(filtered_tasks),
             display_start_time=display_start_time,
             display_end_time=display_end_time
         ),
         end_time,
-        dt.now().strftime('%Y-%m-%dT%H:%M'),
-        f'?hours={str(lookback_hours)}{endtime_str}',
-        [{'label': tag, 'value': tag} for tag in set(all_tags)]
+        dt.now().strftime("%Y-%m-%dT%H:%M"),
+        f'?{workspace_str}{types_str}{hours_str}{endtime_str}',
+        [{'label': tag, 'value': tag} for tag in set(all_tags)],
+        [{'label': ws, 'value': ws} for ws in all_workspaces]
     )
