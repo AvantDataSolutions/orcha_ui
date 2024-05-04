@@ -103,6 +103,7 @@ def create_run_detail_rows(run: tasks.RunItem | None):
                                 'index': 'rd-cancel-run-modal'
                             },
                             className='btn btn-sm btn-warning me-3',
+                            disabled=run.status != tasks.RunStatus.RUNNING,
                             children=[
                                 'Cancel Run'
                             ]
