@@ -92,6 +92,10 @@ def create_tasks_overview(
             ])
         ])
     ]
+    tasks = sorted(tasks, key=lambda x: (
+        x.task_metadata.get('workspace', 'No Workspace'),
+        x.name
+    ), reverse=False)
     for task in tasks:
         next_scheduled_text = task.get_next_scheduled_time()
         if task.status == 'disabled':
@@ -109,11 +113,15 @@ def create_tasks_overview(
         task_runs = runs[task.task_idk][-5:]
         active_runs = task.get_running_runs()
         base_classes = f'col-auto pb-5 pe-5 {get_task_opacity(task)}'
+        if task.task_metadata.get('workspace', 'No Workspace') == 'No Workspace':
+            workspace_str = ''
+        else:
+            workspace_str = f' ({task.task_metadata.get("workspace", "No Workspace")})'
         elements.append(html.Div(className=base_classes, children=[
             html.Div(className='row', children=[
                 html.Div(className='col-auto', children=[
                     dcc.Link(
-                        task.name,
+                        f'{task.name}{workspace_str}',
                         href=f'/task_details?task_id={task.task_idk}',
                         className='task-link h5'
                     )
