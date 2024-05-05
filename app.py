@@ -17,7 +17,8 @@ initialise(
     orcha_user=ORCHA_CORE_USER,
     orcha_pass=ORCHA_CORE_PASSWORD,
     orcha_server=ORCHA_CORE_SERVER,
-    orcha_db=ORCHA_CORE_DB
+    orcha_db=ORCHA_CORE_DB,
+    application_name='orcha_ui'
 )
 
 app = Dash(__name__,
