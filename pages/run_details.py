@@ -128,7 +128,7 @@ def create_run_detail_rows(run: tasks.RunItem | None):
             html.Div(className='col-auto me-2', children=[
                 html.H6('End Time'),
                 html.P(run.end_time),
-            ]),
+            ]) if run.status != tasks.RunStatus.RUNNING else '',
             html.Div(className='col-auto me-2', children=[
                 html.H6('Duration'),
                 html.P(duration),
