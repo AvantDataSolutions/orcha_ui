@@ -26,6 +26,10 @@ dash.register_page(
     can_edit_callback=lambda: True,
 )
 
+def _seconds_only(val: dt | td) -> str:
+    return str(val).split('.')[0]
+
+
 def get_task_opacity(task: tasks.TaskItem):
     if task.status == 'enabled':
         return 'opacity-100'
@@ -45,7 +49,7 @@ def create_tasks_overview(
         last_active_class = 'text-danger'
         uptime = 'Not Active'
     else:
-        sched_last_active_text = str(dt.now() - sched_last_active)
+        sched_last_active_text = _seconds_only(dt.now() - sched_last_active)
         if sched_last_active > (dt.now() - td(minutes=2)):
             last_active_class = 'text-success'
         else:
@@ -55,7 +59,7 @@ def create_tasks_overview(
             uptime = 'Not Active'
             uptime_class = 'text-danger'
         else:
-            uptime = str(dt.now() - sched_loaded_at)
+            uptime = _seconds_only(dt.now() - sched_loaded_at)
             uptime_class = 'text-success'
 
     elements = [
@@ -97,7 +101,7 @@ def create_tasks_overview(
         x.name
     ), reverse=False)
     for task in tasks:
-        next_scheduled_text = task.get_next_scheduled_time()
+        next_scheduled_text = _seconds_only(task.get_next_scheduled_time())
         if task.status == 'disabled':
             next_scheduled_text = 'Disabled'
         elif task.status == 'inactive':
@@ -117,6 +121,8 @@ def create_tasks_overview(
             workspace_str = ''
         else:
             workspace_str = f' ({task.task_metadata.get("workspace", "No Workspace")})'
+
+        width = '120px'
         elements.append(html.Div(className=base_classes, children=[
             html.Div(className='row', children=[
                 html.Div(className='col-auto', children=[
@@ -129,26 +135,29 @@ def create_tasks_overview(
             ]),
             html.Div(className='row', children=[
                 html.Div(className='col-auto', children=[
-                    html.Span('Last Active'),
+                    html.Div('Last Active', style={'width': width}, className='d-inline-block'),
                 ]),
                 html.Div(className='col-auto', children=[
-                    html.P(
-                        str(dt.now() - task.last_active),
+                    html.Span(
+                        _seconds_only(dt.now() - task.last_active),
                         className=task_active_class
                     )
                 ])
             ]),
             html.Div(className='row', children=[
                 html.Div(className='col-auto', children=[
-                    html.Span('Last Scheduled'),
+                    html.Div('Last Run', style={'width': width}, className='d-inline-block'),
                 ]),
                 html.Div(className='col-auto', children=[
-                    html.P(task_runs[-1:][0].scheduled_time if len(task_runs) > 0 else 'N/A')
+                    html.Span(
+                        _seconds_only(task_runs[-1:][0].scheduled_time)
+                        if len(task_runs) > 0 else 'N/A'
+                    )
                 ])
             ]),
-            html.Div(className='row', children=[
+            html.Div(className='row pb-1', children=[
                 html.Div(className='col-auto', children=[
-                    html.Span('Next Scheduled'),
+                    html.Div('Next Scheduled', style={'width': width}, className='d-inline-block'),
                 ]),
                 html.Div(className='col-auto', children=[
                     next_scheduled_text
@@ -157,14 +166,14 @@ def create_tasks_overview(
             run_slices_cmp.create_run_slice_row_bunched(
                 title_div=html.Div(
                     'Active Runs',
-                    style={'width': '100px'},
+                    style={'width': width},
                 ),
                 task_runs=active_runs
             ),
             run_slices_cmp.create_run_slice_row_bunched(
                 title_div=html.Div(
                     'Recent Runs',
-                    style={'width': '100px', 'font-weight': 600},
+                    style={'width': width, 'font-weight': 600},
                 ),
                 task_runs=task_runs
             ),
@@ -401,7 +410,7 @@ def layout(
                         html.Div(className='col-auto g-0 me-3 refresh-time', children=[
                             html.Div('Last Refreshed: ', className='row'),
                             html.Span(
-                                dt.now().strftime('%Y-%m-%dT%H:%M'),
+                                _seconds_only(dt.now()),
                                 id='ov-last-refreshed',
                                 className='row'
                             )
@@ -559,7 +568,7 @@ def update_task_list(
             display_end_time=display_end_time
         ),
         end_time,
-        dt.now().strftime("%Y-%m-%dT%H:%M"),
+        _seconds_only(dt.now()),
         f'?{workspace_str}{types_str}{hours_str}{endtime_str}',
         [{'label': tag, 'value': tag} for tag in set(all_tags)],
         [{'label': ws, 'value': ws} for ws in all_workspaces]
