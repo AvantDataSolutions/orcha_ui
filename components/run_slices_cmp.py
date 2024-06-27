@@ -36,7 +36,11 @@ def run_duration(run: tasks.RunItem) -> str:
     if run.end_time is not None and run.start_time is not None:
         duration = run.end_time - run.start_time
         return str(duration).split('.')[0]
-    return 'Not completed'
+    elif run.start_time is not None:
+        duration = dt.now() - run.start_time
+        return str(duration).split('.')[0]
+    else:
+        return 'Not started'
 
 def create_run_slice_row_bunched(
         title_div: html.Div,
