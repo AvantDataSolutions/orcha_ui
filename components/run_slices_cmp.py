@@ -27,6 +27,16 @@ def get_run_slice_css_class(run: tasks.RunItem):
     else:
         return 'run-unknown'
 
+def run_start_time(run: tasks.RunItem) -> str:
+    if run.start_time is not None:
+        return str(run.start_time).split('.')[0]
+    return ''
+
+def run_duration(run: tasks.RunItem) -> str:
+    if run.end_time is not None and run.start_time is not None:
+        duration = run.end_time - run.start_time
+        return str(duration).split('.')[0]
+    return 'Not completed'
 
 def create_run_slice_row_bunched(
         title_div: html.Div,
@@ -52,8 +62,8 @@ def create_run_slice_row_bunched(
                     '-',
                     html.Div(className='c-tooltiptext', children=[
                         html.P([html.B('Scheduled: '), run.scheduled_time]),
-                        html.P([html.B('Start: '), run.start_time]),
-                        html.P([html.B('End: '), run.end_time]),
+                        html.P([html.B('Start: '), run_start_time(run)]),
+                        html.P([html.B('Duration: '), run_duration(run)]),
                         html.P([html.B('Status: '), run.status]),
                         html.P([html.B('Config: '), json.dumps(run.config)]),
                     ])
@@ -146,8 +156,8 @@ def create_run_slice_row(
                 '-',
                 html.Div(className='c-tooltiptext', children=[
                     html.P([html.B('Scheduled: '), run.scheduled_time]),
-                    html.P([html.B('Start: '), run.start_time]),
-                    html.P([html.B('End: '), run.end_time]),
+                    html.P([html.B('Start: '), run_start_time(run)]),
+                    html.P([html.B('Duration: '), run_duration(run)]),
                     html.P([html.B('Status: '), run.status]),
                     html.P([html.B('Config: '), json.dumps(run.config)]),
                 ])
