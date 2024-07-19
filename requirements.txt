@@ -12,3 +12,7 @@ msal>1.0,<2.0
 # for Orcha
 croniter>2.0,<3.0
 pandas>=2.0,<3.0
+
+# for mqueue
+uvicorn
+fastapi
