@@ -32,15 +32,15 @@ dash.register_page(
 
 
 def get_run_css_class(run: tasks.RunItem):
-    if run.status == 'running':
+    if run.progress == 'queued':
+        return 'run-queued'
+    elif run.progress == 'running':
         return 'run-running'
     elif run.status == 'success':
         return 'run-success'
     elif run.status == 'failed':
         return 'run-failed'
-    elif run.status == 'queued':
-        return 'run-queued'
-    elif run.status == 'warning':
+    elif run.status == 'warn':
         return 'run-warning'
     else:
         return 'run-unknown'
@@ -425,8 +425,12 @@ def cancel_unstarted_runs(ok_clicks, task_id):
         return 'No task selected'
     unstarted_runs = task.get_queued_runs()
     for run in unstarted_runs:
-        run.set_cancelled(
-            output={'message': 'Unstarted runs manually cancelled'},
+        run.set_status(
+            'cancelled',
+            output={'message': 'Unstarted runs manually cancelled'}
+        )
+        run.set_progress(
+            progress='complete',
             zero_duration=True
         )
     return 'Unstarted runs cancelled'

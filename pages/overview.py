@@ -31,7 +31,7 @@ def _seconds_only(val: dt | td) -> str:
 
 
 def get_task_opacity(task: tasks.TaskItem):
-    if task.status == 'enabled':
+    if task.status == 'enabled' or task.status == 'error':
         return 'opacity-100'
     else:
         return 'opacity-50'
@@ -63,7 +63,7 @@ def create_tasks_overview(
             uptime_class = 'text-success'
 
     elements = [
-        html.Div(className='col-auto pb-5 pe-5', children=[
+        html.Div(className='col-auto py-2 pe-5', children=[
             html.Div(className='row', children=[
                 html.Div(className='col-auto', children=[
                     html.Div(
@@ -106,17 +106,23 @@ def create_tasks_overview(
             next_scheduled_text = 'Disabled'
         elif task.status == 'inactive':
             next_scheduled_text = 'Inactive'
+        elif task.status == 'error':
+            next_scheduled_text = 'Error'
 
         task_active_class = 'text-success'
         if task.last_active < (dt.now() - td(minutes=2)):
             task_active_class = 'text-danger'
+
+        error_cls = ''
+        if task.status == 'error':
+            error_cls = 'error-card'
 
         # sort by scheduled time
         runs[task.task_idk].sort(key=lambda x: x.scheduled_time)
         # then get latest 5
         task_runs = runs[task.task_idk][-5:]
         active_runs = task.get_running_runs()
-        base_classes = f'col-auto pb-5 pe-5 {get_task_opacity(task)}'
+        base_classes = f'col-auto py-2 pe-5 {get_task_opacity(task)} {error_cls}'
         if task.task_metadata.get('workspace', 'No Workspace') == 'No Workspace':
             workspace_str = ''
         else:
@@ -483,6 +489,7 @@ def update_refresh_button(end_time):
     Output('app-location-norefresh', 'search'),
     Output('ov-dd-task-types', 'options'),
     Output('ov-dd-task-workspaces', 'options'),
+    Output('ov-dd-task-workspaces', 'value'),
     Input('ov-end-time', 'value'),
     Input('ov-lookback-hours', 'value'),
     Input('ov-refresh-button', 'n_clicks'),
@@ -529,14 +536,19 @@ def update_task_list(
 
     if not workspaces:
         workspaces = ['All Workspaces']
+    # if we have selected at least one workspace, then we don't want
+    # then remove the 'All Workspaces' option so we don't show the tasks
+    # from the unselected workspaces
+    if 'All Workspaces' in workspaces and len(workspaces) > 1:
+        workspaces.remove('All Workspaces')
 
     all_workspaces = set()
     all_workspaces.add('All Workspaces')
     # Loop through all tasks to get all workspaces
     for task in all_tasks:
         workspace = task.task_metadata.get('workspace', 'No Workspace')
-        if workspace not in all_workspaces:
-            all_workspaces.add(workspace)
+        all_workspaces.add(workspace)
+
     # but need to further filter down the filtered tasks list
     if 'All Workspaces' not in workspaces:
         filtered_tasks = [
@@ -571,5 +583,6 @@ def update_task_list(
         _seconds_only(dt.now()),
         f'?{workspace_str}{types_str}{hours_str}{endtime_str}',
         [{'label': tag, 'value': tag} for tag in set(all_tags)],
-        [{'label': ws, 'value': ws} for ws in all_workspaces]
+        [{'label': ws, 'value': ws} for ws in all_workspaces],
+        workspaces
     )

@@ -12,14 +12,16 @@ POPOVER_ID_TYPE = 'rcs-popover-run'
 
 
 def get_run_slice_css_class(run: tasks.RunItem):
-    if run.status == 'running':
+    if run.progress == 'queued':
+        return 'run-queued'
+    elif run.progress == 'running':
         return 'run-running'
+    elif run.status == 'unstarted':
+        return 'run-queued'
     elif run.status == 'success':
         return 'run-success'
     elif run.status == 'failed':
         return 'run-failed'
-    elif run.status == 'queued':
-        return 'run-queued'
     elif run.status == 'warn':
         return 'run-warning'
     elif run.status == 'cancelled':
@@ -96,9 +98,9 @@ def create_run_slice_row(
         # if the run is done and we don't have an end time
         # then set duration to ~zero (e.g. end = start/scheduled time)
         elif run.status in [
-                tasks.RunStatus.WARN,
-                tasks.RunStatus.FAILED,
-                tasks.RunStatus.SUCCESS
+                tasks.RunStatusEnum.warn.value,
+                tasks.RunStatusEnum.failed.value,
+                tasks.RunStatusEnum.success.value
             ]:
             if run.start_time is not None:
                 end_time = run.start_time

@@ -103,7 +103,7 @@ def create_run_detail_rows(run: tasks.RunItem | None):
                                 'index': 'rd-cancel-run-modal'
                             },
                             className='btn btn-sm btn-warning me-3',
-                            disabled=run.status != tasks.RunStatus.RUNNING,
+                            disabled=run.progress != 'complete',
                             children=[
                                 'Cancel Run'
                             ]
@@ -128,7 +128,7 @@ def create_run_detail_rows(run: tasks.RunItem | None):
             html.Div(className='col-auto me-2', children=[
                 html.H6('End Time'),
                 html.P(run.end_time),
-            ]) if run.status != tasks.RunStatus.RUNNING else '',
+            ]) if run.progress == 'complete' else '',
             html.Div(className='col-auto me-2', children=[
                 html.H6('Duration'),
                 html.P(duration),
@@ -139,7 +139,11 @@ def create_run_detail_rows(run: tasks.RunItem | None):
                     f'{run.last_active.strftime("%Y-%m-%d %H:%M:%S")} \
                     ({str(dt.now() - run.last_active)[:-7]})'
                 ) if run.last_active else '',
-            ]) if run.status == 'running' else '',
+            ]) if run.progress == 'running' else '',
+            html.Div(className='col-auto me-2', children=[
+                html.H6('Progress'),
+                html.P(run.progress),
+            ]),
             html.Div(className='col-auto me-2', children=[
                 html.H6('Status'),
                 html.P(run.status),
@@ -199,12 +203,10 @@ def layout(run_id: str = ''):
 
     # if the run isn't 'finished' then we want a higher update interval
     # but if its done then there really isnt anything to update
-    interval_ms = 60000
+    interval_ms = 10000
     if run is not None:
-        if (run.status == tasks.RunStatus.QUEUED
-                or run.status == tasks.RunStatus.RUNNING
-            ):
-            interval_ms = 3000
+        if (run.progress == 'running'):
+            interval_ms = 2000
 
     top_dropdown_row = html.Div(className='row content-row no-bkg py-0 align-items-center', children=[
         html.Div(className='col-auto', children=[
@@ -339,9 +341,13 @@ def cancel_run(n_clicks, run_idk):
     if run is None:
         return dash.no_update
 
-    run.set_cancelled(output={
-        'message': 'Run was cancelled by user.'
-    })
+    run.set_status(
+        status='cancelled',
+        output={
+            'message': 'Run was cancelled by user.'
+        }
+    )
+    run.set_progress('complete', zero_duration=True)
     return [
         create_run_detail_rows(run),
         f'?run_id={run_idk}',
