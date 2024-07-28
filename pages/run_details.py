@@ -286,18 +286,25 @@ def go_to_task(n_clicks):
 @dash.callback(
     dash.Output('rd-runs-dropdown', 'options'),
     dash.Output('rd-runs-dropdown', 'value'),
-    dash.Input('rd-task-dropdown', 'value')
+    dash.Input('rd-task-dropdown', 'value'),
+    dash.State('rd-runs-dropdown', 'value'),
 )
-def update_runs_dropdown(task_idk):
+def update_runs_dropdown(task_idk, run_id):
     if not task_idk:
         return []
     # Select the first run when changing tasks
     # This is to avoid the auto-refresh reloading the runs
     # for the current task, not the newly selected task
     options = get_run_dropdown_options(task_idk)
+    selected_run = options[0]['value'] if options else None
+    # If the selected run matches the current task then
+    # we don't need to change the selected run
+    current_run = tasks.RunItem.get(run_id)
+    if current_run and current_run.task_idf == task_idk:
+        selected_run = dash.no_update
     return [
         options,
-        options[0]['value'] if options else None
+        selected_run
     ]
 
 # callback to update run details
