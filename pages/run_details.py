@@ -190,12 +190,12 @@ def get_run_dropdown_options(task_idk: str):
         return []
     runs = tasks.RunItem.get_all(
         task=task,
-        since=dt.now() - td(days=2),
+        since=dt.now() - td(days=30),
+        max_count=100,
         schedule=None
     )
 
     runs.sort(key=lambda r: r.scheduled_time, reverse=True)
-    runs = runs[:100]
 
     return [
         {
