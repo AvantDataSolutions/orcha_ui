@@ -58,6 +58,18 @@ def create_run_detail_rows(run: tasks.RunItem | None):
                 html.P(s_set.cron_schedule)
             ])
 
+    # Output is a dict of unknowns, so we want to truncate each
+    # key-value pair to 3000 characters
+    # We also want to format the text to be more readable
+    run_output = run.output
+    if run_output:
+        run_output = {
+            k: v[0:3000] for k, v in run_output.items()
+        }
+        run_output = json.dumps(run_output, indent=4)
+    else:
+        run_output = 'No output'
+
     return [
         html.Div(className='row mb-1 border-bottom', children=[
             html.Div(className='col', children=[
@@ -164,7 +176,7 @@ def create_run_detail_rows(run: tasks.RunItem | None):
             html.Div(className='col', children=[
                 html.H6('Output'),
                 html.Pre(
-                    json.dumps(run.output, indent=4)[0:5000],
+                    run_output,
                     style={'white-space': 'pre-wrap'}
                 ),
             ]),
