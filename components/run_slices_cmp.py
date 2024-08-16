@@ -7,6 +7,7 @@ import dash
 from dash import ALL, Input, Output, html
 
 from orcha.core import tasks
+from orcha_ui.utils import format_dt
 
 POPOVER_ID_TYPE = 'rcs-popover-run'
 
@@ -89,23 +90,31 @@ def create_run_slice_row(
     ):
 
     def _get_run_width(run: tasks.RunItem):
-        start_time = run.scheduled_time
-        end_time = dt.utcnow()
+        # If we don't have start or end times, then set them to some defaults
+        # for a sensible width
         if run.start_time is not None:
             start_time = run.start_time
+        else:
+            # if it hasn't started, then the width is zero
+            start_time = run.scheduled_time
+            end_time = start_time
+
         if run.end_time is not None:
             end_time = run.end_time
-        # if the run is done and we don't have an end time
-        # then set duration to ~zero (e.g. end = start/scheduled time)
+        # If we don't have an end time, then use the last_active time
+        # e.g. it failed/stopped when it was last active
         elif run.status in [
                 tasks.RunStatusEnum.warn.value,
                 tasks.RunStatusEnum.failed.value,
                 tasks.RunStatusEnum.success.value
             ]:
-            if run.start_time is not None:
-                end_time = run.start_time
-            else:
+            # Zero duration if we don't have an active time
+            if run.last_active is None:
                 end_time = start_time
+            else:
+                end_time = run.last_active
+        else:
+            end_time = start_time
 
         run_duration = end_time - start_time
         run_duration_in_hours = run_duration.total_seconds() / 3600
