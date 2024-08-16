@@ -176,6 +176,7 @@ def create_run_slice_row(
             end_time = next_run.scheduled_time
         else:
             end_time = display_end_time
+
         run_elements.append(
             html.Div(
                 style={'width': _get_blank_width(
@@ -184,12 +185,28 @@ def create_run_slice_row(
             )
         )
 
+    border_classes = 'border-start border-end border-dark'
+
+    if len(run_elements) == 0:
+        run_elements.append(
+            html.Div('No recent runs to display', className='text-muted')
+        )
 
     return html.Div(className='row', children=[
-        html.Div(className='d-flex flex-row', children=[
-            element
-            for element in run_elements
-        ])
+        html.Div(className='col-12', children=[
+            html.Div(className=f'row g-0 px-1 {border_classes}', children=[
+                # add a start time as the first element
+                html.Div(format_dt(display_start_time), className='col-auto'),
+                html.Div(' ', className='col'),
+                html.Div(format_dt(display_end_time), className='col-auto'),
+            ]),
+        ]),
+        html.Div(className='col-12', children=[
+            html.Div(className=f'd-flex flex-row px-1 {border_classes}', children=[
+                element
+                for element in run_elements
+            ])
+        ]),
     ])
 
 
