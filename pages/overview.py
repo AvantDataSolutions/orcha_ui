@@ -60,7 +60,7 @@ def create_tasks_overview(
             uptime_class = 'text-danger'
         else:
             uptime = _seconds_only(dt.now() - sched_loaded_at)
-            uptime_class = 'text-success'
+            uptime_class = ''
 
     elements = [
         html.Div(className='col-auto py-2 pe-5', children=[
@@ -74,7 +74,7 @@ def create_tasks_overview(
             ]),
             html.Div(className='row', children=[
                 html.Div(className='col-auto', children=[
-                    html.Span('Uptime'),
+                    html.Span('Started'),
                 ]),
                 html.Div(className='col-auto', children=[
                     html.P(
