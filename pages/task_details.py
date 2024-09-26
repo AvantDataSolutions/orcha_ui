@@ -131,6 +131,16 @@ def create_task_element(task: tasks.TaskItem):
                             ]
                         ),
                         toggle_buttton,
+                        html.Button(
+                            id={
+                                'type': modal_cmp.BUTTON_SHOW_TYPE,
+                                'index': 'td-delete-task-modal'
+                            },
+                            className='btn btn-sm btn-danger ms-3',
+                            children=[
+                                'Delete Task'
+                            ]
+                        ),
                     ]),
                 ]),
             ]),
@@ -299,6 +309,28 @@ def layout(task_id: str = ''):
 
     return [
         html.Div(className='container-fluid', children=[
+            modal_cmp.create_modal(
+                inner_html=html.Div([
+                    html.H5(
+                        'Delete Task',
+                        className='fs-5'
+                    ),
+                    html.Span('This will delete the task and all run data'),
+                    html.Br(),
+                    html.Span('from the database and cannot be undone.'),
+                    html.Br(), html.Br(),
+                    html.Span('Logs will not be deleted.'),
+                ]),
+                outer_style={
+                    'background-color': 'white',
+                    'padding': '20px',
+                    'border-radius': '5px',
+                    'border': '1px solid lightgray',
+                    'box-shadow': '0px 0px 10px 10px rgba(0, 0, 0, 0.1)',
+                },
+                id_index='td-delete-task-modal',
+                show=False
+            ),
             html.Div(id='td-div-modal-area'),
             html.Div(className='row content-row no-bkg py-0 align-items-center', children=[
                 html.Div(className='col-auto', children=[
@@ -469,6 +501,26 @@ def create_manual_run(n_clicks, config, task_id, schedule_id):
             break
     else:
         return 'Create Failed'
+
+
+# delete task callback
+@dash.callback(
+    Output('app-location', 'href'),
+    Input({'type': modal_cmp.BUTTON_OK_TYPE, 'index': 'td-delete-task-modal'}, 'n_clicks'),
+    State('td-task-dropdown', 'value'),
+    prevent_initial_call=True,
+)
+def delete_task(ok_clicks, task_id):
+    if ok_clicks is None:
+        return dash.no_update
+    task = tasks.TaskItem.get(task_id)
+    if task is None:
+        return '/overview'
+    try:
+        task.delete_from_db()
+    except Exception:
+        return f'/task_details?task_id={task_id}'
+    return '/overview'
 
 
 @dash.callback(
