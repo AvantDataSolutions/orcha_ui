@@ -6,7 +6,7 @@ from datetime import timedelta as td
 
 import dash
 from dash import dash_table
-from dash import ALL, Input, Output, State, dcc, html
+from dash import Input, Output, State, dcc, html
 
 from orcha.core import tasks
 from orcha_ui.components import autoclear_cpm, run_slices_cmp
