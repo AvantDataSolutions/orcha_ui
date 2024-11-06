@@ -495,6 +495,7 @@ def create_manual_run(n_clicks, config, task_id, schedule_id):
                 run_type='manual',
                 schedule=schedule,
                 scheduled_time=dt.now(),
+                created_by='orcha_ui',
             )
             if run:
                 return 'Manual run created'

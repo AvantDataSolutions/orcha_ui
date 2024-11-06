@@ -10,6 +10,7 @@ from dash import dcc, html
 from orcha.core import tasks
 from orcha_ui.components import modal_cmp
 from orcha_ui.credentials import PLOTLY_APP_PATH
+from orcha_ui.utils import format_dt
 
 
 def can_read():
@@ -132,15 +133,19 @@ def create_run_detail_rows(run: tasks.RunItem | None):
             ]),
             html.Div(className='col-auto me-2', children=[
                 html.H6('Scheduled Time'),
-                html.P(run.scheduled_time),
+                html.P(format_dt(run.scheduled_time)),
+            ]),
+            html.Div(className='col-auto me-2', children=[
+                html.H6('Created By'),
+                html.P(f'{run.created_by} ({format_dt(run.created_time)})'),
             ]),
             html.Div(className='col-auto me-2', children=[
                 html.H6('Start Time'),
-                html.P(run.start_time),
+                html.P(format_dt(run.start_time)),
             ]),
             html.Div(className='col-auto me-2', children=[
                 html.H6('End Time'),
-                html.P(run.end_time),
+                html.P(format_dt(run.end_time)),
             ]) if run.progress == 'complete' else '',
             html.Div(className='col-auto me-2', children=[
                 html.H6('Duration'),
@@ -149,7 +154,7 @@ def create_run_detail_rows(run: tasks.RunItem | None):
             html.Div(className='col-auto me-2', children=[
                 html.H6('Last Active'),
                 html.Div(
-                    f'{run.last_active.strftime("%Y-%m-%d %H:%M:%S")} \
+                    f'{format_dt(run.last_active)} \
                     ({str(dt.now() - run.last_active)[:-7]})'
                 ) if run.last_active else '',
             ]) if run.progress == 'running' else '',
