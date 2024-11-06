@@ -187,6 +187,20 @@ def create_run_detail_rows(run: tasks.RunItem | None):
                 ),
             ]),
         ]),
+        html.Div(className='row', children=[
+            html.Div(className='col', children=[
+                html.Button(
+                    id={
+                        'type': 'rd-btn-go-to-run',
+                        'index': run.output.get('triggered_run_id') or 'no-id'
+                    },
+                    className='btn btn-sm btn-primary me-3',
+                    children=[
+                        'Triggered Task ➡️'
+                    ]
+                )
+            ]),
+        ]) if run.output and run.output.get('triggered_run_id') else ''
     ]
 
 
@@ -285,6 +299,20 @@ def layout(run_id: str = ''):
             ]),
         ])
     ]
+
+@dash.callback(
+    dash.Output('app-location', 'pathname', allow_duplicate=True),
+    dash.Output('app-location', 'search', allow_duplicate=True),
+    dash.Input({'type': 'rd-btn-go-to-run', 'index': dash.ALL}, 'n_clicks'),
+    prevent_initial_call=True
+)
+def go_to_run(n_clicks):
+    if all(v is None for v in n_clicks):
+        return dash.no_update
+    if dash.ctx.triggered_id is None:
+        return dash.no_update
+    run_idk = dash.ctx.triggered_id['index']
+    return '/run_details', f'?run_id={run_idk}'
 
 # go to parent task callback
 @dash.callback(
