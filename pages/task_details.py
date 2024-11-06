@@ -115,6 +115,18 @@ def create_task_element(task: tasks.TaskItem):
             ]
         )
 
+    trigger_run_elements: dict[str | None, list] = {}
+    for sset in task.schedule_sets:
+        if sset.set_idk not in trigger_run_elements:
+            trigger_run_elements[sset.set_idk] = []
+
+        if sset.trigger_config:
+            trigger_run_elements[sset.set_idk].append(
+                html.P(sset.trigger_config.task.task_idk),
+            )
+        else:
+            trigger_run_elements[sset.set_idk].append(html.P('No trigger runs'))
+
     return [
         html.Div(className='row', children=[
             html.Div(className='col-12 border-bottom mb-2 ', children=[
@@ -189,7 +201,9 @@ def create_task_element(task: tasks.TaskItem):
                     html.H6('Frequency'),
                     html.P(sched.cron_schedule),
                     html.H6('Config'),
-                    html.Pre(json.dumps(sched.config, indent=4))
+                    html.Pre(json.dumps(sched.config, indent=4)),
+                    html.H6('Trigger Runs'),
+                    *trigger_run_elements[sched.set_idk]
                 ])
                 for sched in task.schedule_sets
             ]
