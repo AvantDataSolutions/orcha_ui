@@ -265,7 +265,7 @@ def layout(run_id: str = ''):
 
     return [
         dcc.Interval(id='rd-update-interval', interval=interval_ms),
-        html.Div(className='container-fluid', children=[
+        html.Div(className='col-auto', children=[
             top_dropdown_row,
         ]),
         modal_cmp.create_modal(
@@ -285,7 +285,7 @@ def layout(run_id: str = ''):
             id_index='rd-cancel-run-modal',
             show=False
         ),
-        html.Div(className='container-fluid', children=[
+        html.Div(className='col', children=[
             html.Div(className='row content-row', children=[
                 html.Div(className='col-12', children=[
                     html.Div(className='row', children=[
