@@ -66,9 +66,9 @@ def create_run_detail_rows(run: tasks.RunItem | None):
     if run_output:
         # cast to string in the event people log numbers or other types
         run_output = {
-            k: str(v)[0:3000] for k, v in run_output.items()
+            k: v for k, v in run_output.items()
         }
-        run_output = json.dumps(run_output, indent=4)
+        run_output = json.dumps(run_output, indent=4)[0:5000].replace("\\n", "   \n")
     else:
         run_output = 'No output'
 
