@@ -53,11 +53,14 @@ def create_run_history_table(task: tasks.TaskItem, all_runs: list[tasks.RunItem]
         if run.run_type == 'manual':
             schedule_text = 'Manual'
         else:
-            s_set = task.get_schedule_set(run.set_idf)
-            if s_set is not None:
-                schedule_text = s_set.cron_schedule
+            if run.set_idf is None:
+                schedule_text = 'No Schedules'
             else:
-                schedule_text = 'Unknown'
+                s_set = task.get_schedule_set(run.set_idf)
+                if s_set is not None:
+                    schedule_text = s_set.cron_schedule
+                else:
+                    schedule_text = 'Unknown'
         data.append({
             'Run ID': run.run_idk,
             'Schedule': schedule_text,
@@ -126,6 +129,28 @@ def create_task_element(task: tasks.TaskItem):
             )
         else:
             trigger_run_elements[sset.set_idk].append(html.P('No trigger runs'))
+
+    task_schedules = [{'label': s.cron_schedule, 'value': s.set_idk} for s in task.schedule_sets]
+    config_placeholder = 'Select a schedule to populate the config'
+    if len(task_schedules) == 0:
+        task_schedules = [{'label': 'No schedules', 'value': ''}]
+        config_placeholder = json.dumps({"notes": "manually created run"}, indent=4)
+
+    schedule_set_elements = []
+    if len(task.schedule_sets) == 0:
+        schedule_set_elements.append(html.P('No schedules (manual/triggered only)'))
+    else:
+        for s in task.schedule_sets:
+            schedule_set_elements.append(
+                html.Div(className='col-auto', children=[
+                    html.H6('Frequency'),
+                    html.P(s.cron_schedule),
+                    html.H6('Config'),
+                    html.Pre(json.dumps(s.config, indent=4)),
+                    html.H6('Trigger Runs'),
+                    *trigger_run_elements[s.set_idk]
+                ])
+            )
 
     return [
         html.Div(className='row', children=[
@@ -196,17 +221,7 @@ def create_task_element(task: tasks.TaskItem):
             html.Div(className='col-12', children=[
                 html.H6('Schedules'),
             ]),
-            *[
-                html.Div(className='col-auto', children=[
-                    html.H6('Frequency'),
-                    html.P(sched.cron_schedule),
-                    html.H6('Config'),
-                    html.Pre(json.dumps(sched.config, indent=4)),
-                    html.H6('Trigger Runs'),
-                    *trigger_run_elements[sched.set_idk]
-                ])
-                for sched in task.schedule_sets
-            ]
+            *schedule_set_elements,
         ]),
         html.Div(className='row', children=[
             html.Div(className='col-auto', children=[
@@ -234,7 +249,7 @@ def create_task_element(task: tasks.TaskItem):
             html.Div(className='col', children=[
                 dcc.Dropdown(
                     id='td-schedule-dropdown',
-                    options=[{'label': s.cron_schedule, 'value': s.set_idk} for s in task.schedule_sets],
+                    options=task_schedules,
                     value='',
                 )
             ])
@@ -246,7 +261,7 @@ def create_task_element(task: tasks.TaskItem):
                 dcc.Textarea(
                     id='td-config-textarea',
                     className='form-control',
-                    value='Select a schedule to populate the config',
+                    value=config_placeholder,
                     style={'height': '200px'}
                 ),
             ]),
@@ -256,7 +271,7 @@ def create_task_element(task: tasks.TaskItem):
             html.Div(className='col-auto', children=[
                 html.Button(
                     id='td-btn-create-run',
-                    className='d-none',
+                    className='d-none' if len(task_schedules) == 0 else 'btn btn-primary px-5',
                     children=[
                         'Create'
                     ]
@@ -501,21 +516,29 @@ def create_manual_run(n_clicks, config, task_id, schedule_id):
     except json.JSONDecodeError:
         return 'Config is not valid JSON'
 
-    for schedule in task.schedule_sets:
-        if schedule.set_idk == schedule_id:
-            schedule.config = new_config
-            run = tasks.RunItem.create(
-                task=task,
-                run_type='manual',
-                schedule=schedule,
-                scheduled_time=dt.now(),
-                created_by='orcha_ui',
-            )
-            if run:
-                return 'Manual run created'
-            break
+    if len(task.schedule_sets) == 0:
+        cur_schedule = None
+        cur_config = new_config
     else:
-        return 'Create Failed'
+        for schedule in task.schedule_sets:
+            if schedule.set_idk == schedule_id:
+                cur_schedule = schedule
+                cur_schedule.config = new_config
+                cur_config = {}
+                break
+        else:
+            return 'Create Failed'
+
+    run = tasks.RunItem.create(
+        task=task,
+        run_type='manual',
+        schedule=cur_schedule,
+        scheduled_time=dt.now(),
+        created_by='orcha_ui',
+        config_override=cur_config
+    )
+    if run:
+        return 'Manual run created'
 
 
 # delete task callback
