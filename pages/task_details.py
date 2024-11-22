@@ -422,11 +422,16 @@ def update_config_textarea(schedule_id, task_id):
 
     if task is None:
         return 'No task found', 'd-none'
-
+    # Include the default config in the config text area
+    # to show users what options are available
+    default_config = task.task_config
     s_set = None
     for schedule in task.schedule_sets:
         if schedule.set_idk == schedule_id:
             s_set = schedule
+            config_with_defaults = default_config.copy()
+            config_with_defaults.update(s_set.config)
+            s_set.config = config_with_defaults
             s_set.config['notes'] = 'manually created run'
             break
     if s_set is None:
