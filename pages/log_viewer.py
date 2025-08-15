@@ -50,6 +50,10 @@ def _get_distinct_sources() -> list[str]:
     return LogManager.get_distinct_sources()
 
 
+def _to_title_case(text: str) -> str:
+    return text.replace('_', ' ').title()
+
+
 def _query_logs(start_dt: dt, end_dt: dt, sources: list[str] | None, limit: int) -> list[dict[str, Any]]:
     # If 'All Sources' is present or sources is empty, query all logs
     if not sources or 'All Sources' in sources:
@@ -94,9 +98,9 @@ def _render_logs_table(entries: list[dict[str, Any]]):
         js_disp = (js_str[:200] + '…') if len(js_str) > 200 else js_str
         rows.append(html.Tr([
             html.Td(_fmt_dt(e['created'])),
-            html.Td(e['source']),
-            html.Td(e['category']),
-            html.Td(e['actor']),
+            html.Td(_to_title_case(e['source'])),
+            html.Td(_to_title_case(e['category'])),
+            html.Td(_to_title_case(e['actor'])),
             html.Td(text_disp),
             html.Td(js_disp, className='font-monospace small'),
         ]))
@@ -147,7 +151,11 @@ def layout(hours: int | None = None, start: str | None = None, end: str | None =
 
     selected_sources = ['All Sources'] if sources is None else sources.split(',')
 
-    src_options = [{'label': s, 'value': s} for s in (['All Sources'] + _get_distinct_sources())]
+    src_options = [
+        {'label': _to_title_case(s), 'value': s}
+        for s in (['All Sources'] + _get_distinct_sources())
+    ]
+    print(src_options)
 
     return [
         html.Div(className='container-fluid', children=[
@@ -277,7 +285,10 @@ def lv_update_logs(start_time, end_time, selected_sources, limit, _n_clicks, _n_
 
     # Refresh source options each time to reflect new emitters
     all_sources = ['All Sources'] + _get_distinct_sources()
-    src_options = [{'label': s, 'value': s} for s in all_sources]
+    src_options = [
+        {'label': _to_title_case(s), 'value': s}
+        for s in all_sources
+    ]
 
     if not selected_sources or len(selected_sources) == 0:
         selected_sources = ['All Sources']
