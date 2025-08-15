@@ -27,7 +27,9 @@ dash.register_page(
     order=100,
 )
 
-def _seconds_only(val: dt | td) -> str:
+def _seconds_only(val: dt | td | None) -> str:
+    if val is None:
+        return ''
     return str(val).split('.')[0]
 
 
