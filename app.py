@@ -155,7 +155,7 @@ def do_navigate(selected_page, pathname):
     return dash.no_update
 
 if __name__ == '__main__':
-    app.run_server(
+    app.run(
         debug=os.environ['IS_DEV']=='True',
         host='0.0.0.0',
         dev_tools_props_check=False # to use input datetime-local
