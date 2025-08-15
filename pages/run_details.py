@@ -26,6 +26,7 @@ dash.register_page(
     description='View the details of a specific run.',
     can_read_callback=can_read,
     can_edit_callback=lambda: True,
+    order=200,
 )
 
 

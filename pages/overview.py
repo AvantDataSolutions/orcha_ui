@@ -24,6 +24,7 @@ dash.register_page(
     description='Overview of current Orcha tasks and runs.',
     can_read_callback=can_read,
     can_edit_callback=lambda: True,
+    order=100,
 )
 
 def _seconds_only(val: dt | td) -> str:
