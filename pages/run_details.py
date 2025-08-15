@@ -229,6 +229,7 @@ def get_run_dropdown_options(task_idk: str):
 def layout(run_id: str = ''):
 
     run = tasks.RunItem.get(run_id)
+    run_options = get_run_dropdown_options(run.task_idf) if run else []
 
     all_tasks = tasks.TaskItem.get_all()
 
@@ -258,7 +259,7 @@ def layout(run_id: str = ''):
         html.Div(className='col', children=[
             dcc.Dropdown(
                 id='rd-runs-dropdown',
-                options=[],
+                options=run_options,
                 value=run_id,
             )
         ])
@@ -335,6 +336,7 @@ def go_to_task(n_clicks):
     dash.Output('rd-runs-dropdown', 'value'),
     dash.Input('rd-task-dropdown', 'value'),
     dash.State('rd-runs-dropdown', 'value'),
+    prevent_initial_call=True
 )
 def update_runs_dropdown(task_idk, run_id):
     if not task_idk:
