@@ -337,7 +337,7 @@ def go_to_task(n_clicks):
 )
 def update_runs_dropdown(task_idk, run_id):
     if not task_idk:
-        return []
+        return [[], None]
     # Select the first run when changing tasks
     # This is to avoid the auto-refresh reloading the runs
     # for the current task, not the newly selected task
