@@ -159,7 +159,7 @@ def layout(hours: int | None = None, start: str | None = None, end: str | None =
 
     return [
         html.Div(className='container-fluid', children=[
-            dcc.Interval(id='lv-refresh-interval', interval=30000),
+            dcc.Interval(id='lv-refresh-interval', interval=120000),
             html.Div(className='row content-row no-bkg py-0 mt-0 align-items-center', children=[
                 html.Div(className='col-auto', children=[
                     html.Label('Sources', style={'font-weight': 'normal'}),
