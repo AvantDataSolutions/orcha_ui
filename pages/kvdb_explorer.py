@@ -74,6 +74,7 @@ def _render_entries_table(entries: list[dict[str, Any]]):
 	header = html.Thead(html.Tr([
 		html.Th('Key'),
 		html.Th('Type'),
+		html.Th('Encrypted'),
 		html.Th('Size'),
 		html.Th('Expiry'),
 		html.Th('TTL'),
@@ -92,6 +93,7 @@ def _render_entries_table(entries: list[dict[str, Any]]):
 		rows.append(html.Tr([
 			html.Td(entry['key']),
 			html.Td(entry.get('type', 'unknown')),
+			html.Td('Yes' if entry.get('is_encrypted') else 'No'),
 			html.Td(_format_bytes(entry.get('size_bytes', 0))),
 			html.Td(_format_expiry(entry.get('expiry'))),
 			html.Td(_format_ttl(entry.get('ttl_seconds'))),
@@ -182,6 +184,10 @@ def _build_metadata_block(entry: dict[str, Any] | None):
 		html.Div([
 			html.Strong('Type: '),
 			entry.get('type', 'unknown')
+		]),
+		html.Div([
+			html.Strong('Encrypted: '),
+			'Yes' if entry.get('is_encrypted') else 'No'
 		]),
 		html.Div([
 			html.Strong('Size: '),
@@ -316,6 +322,16 @@ def layout(key: str | None = None, search: str | None = None):
 									)
 								])
 							]),
+							html.Div(className='mb-2', children=[
+								html.Label('Encryption Key (optional)', className='form-label fw-normal'),
+								dcc.Input(
+									id='kv-encryption-key',
+									type='password',
+									value='',
+									placeholder='Provide to decrypt/encrypt values',
+									style={'width': '100%'}
+								)
+							]),
 							html.Div(className='row g-2 mb-2', children=[
 								html.Div(className='col-auto', children=[
 									html.Button('Load', id='kv-load-button', className='btn btn-outline-secondary btn-sm')
@@ -406,9 +422,10 @@ def kv_sync_key_input(selected_key):
 	Output('kv-expiry-minutes', 'value'),
 	Input('kv-load-button', 'n_clicks'),
 	State('kv-key-input', 'value'),
+	State('kv-encryption-key', 'value'),
 	prevent_initial_call=True
 )
-def kv_load_entry(_n_clicks, key_value):
+def kv_load_entry(_n_clicks, key_value, encryption_key):
 	key = (key_value or '').strip()
 	if not key:
 		return (
@@ -419,25 +436,36 @@ def kv_load_entry(_n_clicks, key_value):
 			'alert alert-warning small',
 			dash.no_update
 		)
+	meta = _find_entry_metadata(key)
+	encryption_key_clean = (encryption_key or '').strip() or None
+	if meta and meta.get('is_encrypted') and not encryption_key_clean:
+		return (
+			dash.no_update,
+			dash.no_update,
+			_build_metadata_block(meta),
+			'Entry is encrypted. Provide an encryption key to load it.',
+			'alert alert-warning small',
+			dash.no_update
+		)
 	try:
 		raw_value = kvdb.get(
 			key=key,
 			as_type=object,
 			storage_type='postgres',
-			no_key_return='exception'
+			no_key_return='exception',
+			encryption_key=encryption_key_clean
 		)
 	except Exception as exc:
 		return (
 			'',
 			dash.no_update,
-			dash.no_update,
+			_build_metadata_block(meta),
 			f'Error loading key: {exc}',
 			'alert alert-danger small',
 			dash.no_update
 		)
 
 	value_text, value_mode = _stringify_value(raw_value)
-	meta = _find_entry_metadata(key)
 	ttl_minutes = None
 	if meta and meta.get('ttl_seconds') is not None and meta['ttl_seconds'] > 0:
 		ttl_minutes = round(meta['ttl_seconds'] / 60, 2)
@@ -464,12 +492,13 @@ def kv_load_entry(_n_clicks, key_value):
 	State('kv-value-text', 'value'),
 	State('kv-value-mode', 'value'),
 	State('kv-expiry-minutes', 'value'),
+	State('kv-encryption-key', 'value'),
 	State('kv-refresh-signal', 'data'),
 	prevent_initial_call=True
 )
 def kv_update_entry(
 	    save_clicks, delete_clicks, key_value, value_text,
-		value_mode, expiry_minutes, signal_value
+		value_mode, expiry_minutes, encryption_key, signal_value
     ):
 
 	triggered = dash.ctx.triggered_id
@@ -531,15 +560,18 @@ def kv_update_entry(
 			if minutes_float > 0:
 				expiry = td(minutes=minutes_float)
 
+		encryption_key_clean = (encryption_key or '').strip() or None
 		kvdb.store(
 			storage_type='postgres',
 			key=key,
 			value=parsed_value,
-			expiry=expiry
+			expiry=expiry,
+			encryption_key=encryption_key_clean
 		)
 		meta = _find_entry_metadata(key)
+		status_suffix = ' (encrypted)' if encryption_key_clean else ''
 		return (
-			f'Entry "{key}" saved.',
+			f'Entry "{key}" saved{status_suffix}.',
 			'alert alert-success small',
 			(signal_value or 0) + 1,
 			dash.no_update,
