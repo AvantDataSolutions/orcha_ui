@@ -155,7 +155,6 @@ def layout(hours: int | None = None, start: str | None = None, end: str | None =
         {'label': _to_title_case(s), 'value': s}
         for s in (['All Sources'] + _get_distinct_sources())
     ]
-    print(src_options)
 
     return [
         html.Div(className='container-fluid', children=[
