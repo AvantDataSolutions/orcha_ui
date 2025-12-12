@@ -51,6 +51,7 @@ def create_tasks_overview(
         sched_last_active_text = 'Not Active'
         last_active_class = 'text-danger'
         uptime = 'Not Active'
+        uptime_class = 'text-danger'
     else:
         sched_last_active_text = _seconds_only(dt.now() - sched_last_active)
         if sched_last_active > (dt.now() - td(minutes=2)):
