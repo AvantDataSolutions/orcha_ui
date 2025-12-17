@@ -81,7 +81,7 @@ app.layout = html.Div(className='container-fluid p-3 main-page', children=[
                 ),
             ]),
         ]),
-        html.Div(className='col', children=[
+        html.Div(className='col overflow-auto', children=[
                 html.Div(id='app-div-readonly', className='d-none', children=[
                     html.Div('read-only view'),
                 ]),
