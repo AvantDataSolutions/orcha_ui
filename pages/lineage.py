@@ -231,11 +231,17 @@ def build_lineage_d3_model(selected_task_ids: set[str] | None = None) -> dict[st
 
     palette = _generate_palette(len(task_order))
 
+    # Map task id -> human label for clientside tooltips/legend
+    task_labels: dict[str, str] = {}
+    for t, _ in runs_data:
+        task_labels[str(t.task_idk)] = (t.name if getattr(t, 'name', None) else str(t.task_idk))
+
     return {
         "nodes": d3_nodes,
         "task_links": task_links,
         "task_order": task_order,
-        "palette": palette
+        "palette": palette,
+        "task_labels": task_labels,
     }
 
 
@@ -366,7 +372,14 @@ async function(model) {
 
     // Layout: vertical tree.
     const dx = 86;
-    const dy = 220;
+    // Compute horizontal spacing dynamically so left/right nodes expand to fill
+    // the available canvas width instead of using a fixed spacing.
+    const depths = root.descendants().map((d) => (d && d.depth) ? d.depth : 0);
+    const maxDepth = depths.length ? Math.max(...depths) : 1;
+    const availableWidth = Math.max(600, width) - margin.left - margin.right - 40;
+
+    // Leave a reasonable minimum spacing per level.
+    const dy = Math.max(100, Math.floor(availableWidth / Math.max(1, maxDepth)));
     const treeLayout = d3ref.tree().nodeSize([dx, dy]);
     treeLayout(root);
 
@@ -375,7 +388,7 @@ async function(model) {
         if(d.x < x0) x0 = d.x;
         if(d.x > x1) x1 = d.x;
     });
-    const height = Math.max(520, Math.floor((x1 - x0) + margin.top + margin.bottom + 40));
+    const height = Math.floor((x1 - x0) + margin.top + margin.bottom + 40);
 
     const svg = d3ref.select(canvas)
         .append('svg')
@@ -395,8 +408,6 @@ async function(model) {
         .selectAll('g')
         .data(root.descendants().filter((d) => {
             if(!d || !d.data) return false;
-            // Exclude the layout root and any 'task' nodes (tasks are not
-            // represented as visible nodes anymore).
             const k = String(d.data.kind || '');
             return k !== 'root' && k !== 'task';
         }))
@@ -421,35 +432,13 @@ async function(model) {
     // Use a square symbol for task nodes (smaller size) instead of a star.
     const squareSymbol = d3ref.symbol().type(d3ref.symbolSquare).size(280);
     node.each(function(d) {
-        try {
-            const k = (d && d.data && d.data.kind) ? String(d.data.kind) : 'module';
-            if(k === 'task') {
-                d3ref.select(this)
-                    .append('path')
-                    .attr('d', squareSymbol)
-                    .attr('fill', fillFor(d))
-                    .attr('stroke', '#666')
-                    .attr('stroke-width', 1.5)
-                    .attr('class', kindClass(d));
-            } else {
-                d3ref.select(this)
-                    .append('circle')
-                    .attr('r', (d.data && d.data.kind === 'root') ? 0 : 10)
-                    .attr('fill', fillFor(d))
-                    .attr('stroke', '#666')
-                    .attr('stroke-width', 1.5)
-                    .attr('class', kindClass(d));
-            }
-        } catch(e) {
-            // Fallback to circle if symbol generation fails.
-            d3ref.select(this)
-                .append('circle')
-                .attr('r', 10)
-                .attr('fill', fillFor(d))
-                .attr('stroke', '#666')
-                .attr('stroke-width', 1.5)
-                .attr('class', kindClass(d));
-        }
+        d3ref.select(this)
+            .append('circle')
+            .attr('r', 10)
+            .attr('fill', fillFor(d))
+            .attr('stroke', '#666')
+            .attr('stroke-width', 1.5)
+            .attr('class', kindClass(d));
     });
 
     // Place labels below each node and center them. Increase `dy` for extra padding.
@@ -499,23 +488,171 @@ async function(model) {
         });
 
         const links = Array.isArray(model.task_links) ? model.task_links : [];
-        const linkData = links
-            .map((e) => ({
-                task: e.task,
-                source: pos.get(Number(e.source)),
-                target: pos.get(Number(e.target))
-            }))
-            .filter((e) => e.task && e.source && e.target);
 
-        g.append('g')
+        // Build per-task adjacency to reconstruct chains
+        const byTask = new Map();
+        for(const e of links) {
+            const t = String(e.task);
+            if(!byTask.has(t)) byTask.set(t, []);
+            byTask.get(t).push([Number(e.source), Number(e.target)]);
+        }
+
+        // Create tooltip div
+        let tooltip = document.getElementById('lineage-tooltip');
+        if(!tooltip) {
+            tooltip = document.createElement('div');
+            tooltip.id = 'lineage-tooltip';
+            tooltip.style.position = 'absolute';
+            tooltip.style.pointerEvents = 'none';
+            tooltip.style.display = 'none';
+            tooltip.style.background = 'rgba(255,255,255,0.95)';
+            tooltip.style.border = '1px solid #ccc';
+            tooltip.style.padding = '6px 8px';
+            tooltip.style.borderRadius = '4px';
+            tooltip.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
+            tooltip.style.fontSize = '0.9em';
+            tooltip.style.zIndex = 1000;
+            canvas.appendChild(tooltip);
+        }
+
+        // Track which mid nodes we will hide per task
+        const hiddenMidIds = new Set();
+
+        // Connectors to draw: {task, sourcePos, targetPos, dashed}
+        const connectors = [];
+
+        for(const [task, edgeList] of byTask.entries()) {
+            // Build parent->child map and child->parent
+            const parentMap = new Map();
+            const childSet = new Set();
+            for(const [p,c] of edgeList) {
+                parentMap.set(p, c);
+                childSet.add(c);
+            }
+            // Find chain starts (nodes that are parents but not any child)
+            const starts = [];
+            for(const [p,_c] of edgeList) {
+                if(!childSet.has(p)) starts.push(p);
+            }
+            // For each start, follow chain
+            for(const s of starts) {
+                const chain = [s];
+                let cur = s;
+                while(parentMap.has(cur)) {
+                    const nxt = parentMap.get(cur);
+                    chain.push(nxt);
+                    cur = nxt;
+                }
+
+                // Determine mids (exclude endpoints)
+                const mids = chain.slice(1, -1);
+                if(mids.length <= 3) {
+                    // show all edges as-is
+                    for(let i=0;i<chain.length-1;i++) {
+                        const a = chain[i];
+                        const b = chain[i+1];
+                        const pa = pos.get(Number(a));
+                        const pb = pos.get(Number(b));
+                        if(pa && pb) connectors.push({task: task, src: pa, tgt: pb, dashed: false});
+                    }
+                } else {
+                    // Choose up to 3 mids to display evenly
+                    const m = mids.length;
+                    const k = 3; // max mids
+                    const selected = new Set();
+                    for(let i=0;i<k;i++) {
+                        const idx = Math.round(i * (m-1) / (k-1));
+                        selected.add(mids[idx]);
+                    }
+                    // Mark hidden mids
+                    for(const mid of mids) {
+                        if(!selected.has(mid)) hiddenMidIds.add(mid);
+                    }
+                    // Build visible nodes = first + selected mids in chain order + last
+                    const visible = [chain[0]];
+                    for(const mid of mids) if(selected.has(mid)) visible.push(mid);
+                    visible.push(chain[chain.length-1]);
+
+                    // For each consecutive visible pair, draw connector (dashed if they are not adjacent in original chain)
+                    for(let i=0;i<visible.length-1;i++) {
+                        const a = visible[i];
+                        const b = visible[i+1];
+                        const idxA = chain.indexOf(a);
+                        const idxB = chain.indexOf(b);
+                        const pa = pos.get(Number(a));
+                        const pb = pos.get(Number(b));
+                        if(pa && pb) connectors.push({task: task, src: pa, tgt: pb, dashed: (idxB - idxA) > 1});
+                    }
+                }
+            }
+        }
+
+        // Hide mid nodes that were marked hidden
+        node.filter((d) => (d && d.data && d.data.subtype === 'mid' && hiddenMidIds.has(Number(d.data.id))))
+            .style('display', 'none');
+
+        // Draw connectors
+        const pathLayer = g.append('g')
             .attr('fill', 'none')
             .attr('stroke-width', 2)
-            .attr('stroke-opacity', 0.85)
-            .selectAll('path')
-            .data(linkData)
+            .attr('stroke-opacity', 0.85);
+
+        pathLayer.selectAll('path')
+            .data(connectors)
             .join('path')
+            .attr('data-task', (d) => String(d.task))
             .attr('stroke', (d) => colorFor(d.task))
-            .attr('d', (d) => linkGen({source: d.source, target: d.target}));
+            .attr('d', (d) => linkGen({source: d.src, target: d.tgt}))
+            .attr('stroke-dasharray', (d) => d.dashed ? '6,4' : null)
+            .on('mouseover', function(event, d) {
+                try {
+                    const task = String(d.task);
+                    const taskName = (model.task_labels && model.task_labels[task]) ? model.task_labels[task] : task;
+
+                    // Highlight all connectors for this task
+                    d3ref.selectAll(`path[data-task='${task}']`)
+                        .raise()
+                        .attr('stroke-width', 4)
+                        .attr('stroke-opacity', 1);
+
+                    // Highlight visible nodes that belong to this task
+                    node.filter((n) => (n && n.data && Array.isArray(n.data.groups) && n.data.groups.indexOf(task) >= 0))
+                        .selectAll('path,circle')
+                        .attr('stroke-width', 3)
+                        .attr('stroke', '#333');
+
+                    // Show tooltip
+                    tooltip.style.display = 'block';
+                    tooltip.textContent = taskName;
+                    const crect = canvas.getBoundingClientRect();
+                    tooltip.style.left = (event.clientX - crect.left + 8) + 'px';
+                    tooltip.style.top = (event.clientY - crect.top + 8) + 'px';
+                } catch(e) {
+                    console.warn('Hover handler error', e);
+                }
+            })
+            .on('mousemove', function(event, d) {
+                const crect = canvas.getBoundingClientRect();
+                tooltip.style.left = (event.clientX - crect.left + 8) + 'px';
+                tooltip.style.top = (event.clientY - crect.top + 8) + 'px';
+            })
+            .on('mouseout', function(event, d) {
+                try {
+                    const task = String(d.task);
+                    d3ref.selectAll(`path[data-task='${task}']`)
+                        .attr('stroke-width', 2)
+                        .attr('stroke-opacity', 0.85);
+
+                    // Reset node styles
+                    node.selectAll('path,circle')
+                        .attr('stroke-width', 1.5)
+                        .attr('stroke', '#666');
+
+                    tooltip.style.display = 'none';
+                } catch(e) {
+                    console.warn('Hover out handler error', e);
+                }
+            });
     } catch(e) {
         console.warn('Per-task link render failed', e);
     }
