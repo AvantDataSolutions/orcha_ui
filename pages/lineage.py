@@ -1,21 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime as dt, timedelta as td
+import colorsys
 from typing import Any
-import json
-import math
 
-import plotly.graph_objects as go
 import dash
-from dash import dcc, html, Input, Output
+from dash import Input, Output, dcc, html
 
-from orcha_ui.credentials import (
-    PLOTLY_APP_PATH
-)
-
-# Use the log structure defined in orcha.utils.log
-from orcha.utils.log import LogManager
 from orcha.core import tasks
+from orcha_ui.credentials import PLOTLY_APP_PATH
 
 
 def can_read():
@@ -35,380 +27,216 @@ dash.register_page(
 )
 
 
-def build_lineage_figure(selected_task_ids: set[str] | None = None) -> go.Figure:
+def _is_source(module_type: str | None) -> bool:
+    return isinstance(module_type, str) and module_type.lower().startswith("source")
 
+
+def _is_sink(module_type: str | None) -> bool:
+    return isinstance(module_type, str) and module_type.lower().startswith("sink")
+
+
+def build_lineage_d3_model(selected_task_ids: set[str] | None = None) -> dict[str, Any]:
     all_tasks = tasks.TaskItem.get_all()
-
-    # filter tasks if selection provided
     if selected_task_ids:
         all_tasks = [t for t in all_tasks if t.task_idk in selected_task_ids]
 
-    latest_runs: dict[str, tasks.RunItem] = {}
-
+    # Collect latest successful run output per task
+    runs_data: list[tuple[tasks.TaskItem, dict[str, Any]]] = []
     for task in all_tasks:
-        latest_run = tasks.RunItem.get_latest(task=task, status='success')
-        if latest_run:
-            latest_runs[task.task_idk] = latest_run
+        latest_run = tasks.RunItem.get_latest(task=task, status="success")
+        if not latest_run:
+            continue
+        out = latest_run.output or {}
+        if isinstance(out, dict):
+            runs_data.append((task, out))
 
-    fig = go.Figure()
-    # Collect run outputs from latest runs and parse JSON (keep task idk for grouping)
-    runs_data: list[tuple[str, dict[str, Any]]] = []
-    for task_idk, run in latest_runs.items():
-        # assume output exists
-        output = run.output or {}
-        runs_data.append((task_idk, output))
+    nodes: dict[str, dict[str, Any]] = {}
+    edges: list[tuple[str, str]] = []
+    next_id = 1
 
-    # Build graph: nodes and edges
-    # We'll create module nodes and entity nodes (prefixed for clarity)
-    nodes: dict[str, dict] = {}
-    edges: set[tuple[str, str]] = set()
+    def ensure_node(
+        key: str,
+        *,
+        label: str,
+        kind: str,
+        subtype: str | None = None,
+        group: str | None = None,
+    ) -> int:
+        nonlocal next_id
+        if key in nodes:
+            if group:
+                nodes[key].setdefault("groups", set()).add(group)
+            return nodes[key]["id"]
+        node_id = next_id
+        next_id += 1
+        nodes[key] = {
+            "id": node_id,
+            "key": key,
+            "label": label,
+            "kind": kind,
+            "subtype": subtype,
+            "groups": set([group]) if group else set(),
+        }
+        return node_id
 
-    # groups_all maps task_idk -> all node keys belonging to that task (used for hover mapping)
-    groups_all: dict[str, set[str]] = {}
-    # modules_by_task maps task_idk -> module node keys (used for component grouping and boxes)
-    modules_by_task: dict[str, set[str]] = {}
+    def add_edge(parent_key: str, child_key: str) -> None:
+        edges.append((parent_key, child_key))
 
-    for task_idk, out in runs_data:
-        groups_all.setdefault(task_idk, set())
-        modules_by_task.setdefault(task_idk, set())
-        run_times = out.get("run_times") or out.get("run_times", [])
-        if not isinstance(run_times, list):
+    for task, out in runs_data:
+        task_group = str(task.task_idk)
+        run_times = out.get("run_times") or []
+        if not isinstance(run_times, list) or not run_times:
             continue
 
-        prev_module_idk: str | None = None
-        for entry in run_times:
+        prev_key: str | None = None
+        last_source_key: str | None = None
+        task_inserted = False
+
+        for step_index, entry in enumerate(run_times):
+            if not isinstance(entry, dict):
+                continue
+
             module_idk = entry.get("module_idk")
             module_type = entry.get("module_type")
             module_entity = entry.get("module_entity")
-
             if not module_idk:
                 continue
 
-            mod_label = f"module:{module_idk}"
-            if mod_label not in nodes:
-                nodes[mod_label] = {"kind": "module", "label": module_idk, "module_type": (module_type or "").lower()}
-            # record membership for this task's group
-            groups_all.setdefault(task_idk, set()).add(mod_label)
-            modules_by_task[task_idk].add(mod_label)
+            if _is_source(module_type):
+                # shared source module + shared source entity
+                if module_entity:
+                    ent_key = f"entity:source:{module_entity}"
+                    ensure_node(ent_key, label=str(module_entity), kind="entity", subtype="source", group=task_group)
+                module_key = f"module:source:{module_idk}"
+                ensure_node(module_key, label=str(module_idk), kind="module", subtype="source", group=task_group)
+                if module_entity:
+                    add_edge(ent_key, module_key)
 
-            # Create entity node if present (duplicate per role so same name can exist on both sides)
-            ent_label = None
-            if module_entity:
-                mtype = (module_type or "").lower()
-                if mtype.startswith("source"):
-                    ent_label = f"entity_source:{module_entity}"
-                elif mtype.startswith("sink"):
-                    ent_label = f"entity_sink:{module_entity}"
+                # If there are multiple sources in a run, chain them in-order.
+                if last_source_key is not None:
+                    add_edge(last_source_key, module_key)
+                last_source_key = module_key
+                continue
+
+            if not task_inserted:
+                if last_source_key is not None:
+                    prev_key = last_source_key
                 else:
-                    ent_label = f"entity_other:{module_entity}"
+                    prev_key = None
+                task_inserted = True
 
-                if ent_label not in nodes:
-                    nodes[ent_label] = {"kind": "entity", "label": module_entity, "role": mtype if mtype else "other"}
-                # record membership for this task's group
-                groups_all.setdefault(task_idk, set()).add(ent_label)
+            if _is_sink(module_type):
+                # shared sink module across all tasks
+                module_key = f"module:sink:{module_idk}"
+                ensure_node(module_key, label=str(module_idk), kind="module", subtype="sink", group=task_group)
+                if prev_key is not None:
+                    add_edge(prev_key, module_key)
+                prev_key = module_key
 
-            # Connect previous module -> current module in sequence (workflow ordering)
-            if prev_module_idk:
-                edges.add((f"module:{prev_module_idk}", mod_label))
+                if module_entity:
+                    # shared sink entity across all sinks
+                    ent_key = f"entity:sink:{module_entity}"
+                    ensure_node(ent_key, label=str(module_entity), kind="entity", subtype="sink", group=task_group)
+                    add_edge(module_key, ent_key)
+                continue
 
-            # Connect module <-> entity depending on type
-            # For sources, connect entity -> module; for sinks, module -> entity; otherwise module -> entity
-            if ent_label:
-                if isinstance(module_type, str) and module_type.lower().startswith("source"):
-                    edges.add((ent_label, mod_label))
-                elif isinstance(module_type, str) and module_type.lower().startswith("sink"):
-                    edges.add((mod_label, ent_label))
-                else:
-                    edges.add((mod_label, ent_label))
+            # intermediate: never shared across tasks
+            module_key = f"module:mid:{task.task_idk}:{module_idk}:{step_index}"
+            ensure_node(
+                module_key,
+                label=str(module_idk),
+                kind="module",
+                subtype="mid",
+                group=task_group,
+            )
+            if prev_key is not None:
+                add_edge(prev_key, module_key)
+            prev_key = module_key
 
-            prev_module_idk = module_idk
-
-    # If no nodes collected, return empty placeholder
-    if not nodes:
-        fig.update_layout(xaxis=dict(visible=False), yaxis=dict(visible=False), plot_bgcolor="white")
-        fig.add_annotation(text="No lineage data available", x=0.5, y=0.5, showarrow=False, xref="paper", yref="paper")
-        return fig
-
-    # Layout nodes left-to-right in columns:
-    # source entities -> sources -> (others/middle) -> sinks -> sink entities
-    node_keys = list(nodes.keys())
-    pos: dict[str, tuple[float, float]] = {}
-
-    columns = {
-        "source_entities": [],
-        "sources": [],
-        "others": [],
-        "sinks": [],
-        "sink_entities": [],
-    }
-
-    for key, meta in nodes.items():
-        if meta.get("kind") == "module":
-            mt = (meta.get("module_type") or "").lower()
-            if mt.startswith("source"):
-                columns["sources"].append(key)
-            elif mt.startswith("sink"):
-                columns["sinks"].append(key)
-            else:
-                columns["others"].append(key)
-        else:
-            # key prefix determines column to allow same entity name to live in both lists
-            if key.startswith("entity_source:"):
-                columns["source_entities"].append(key)
-            elif key.startswith("entity_sink:"):
-                columns["sink_entities"].append(key)
-            else:
-                columns["others"].append(key)
-
-    # Define column order left-to-right. If `others` is empty it will still occupy the middle.
-    col_order = ["source_entities", "sources", "others", "sinks", "sink_entities"]
-    spacing_x = 3.0
-    spacing_y = 1.5
-
-    for ci, col_name in enumerate(col_order):
-        items = columns[col_name]
-        count = len(items)
-        x = ci * spacing_x
-        for i, key in enumerate(items):
-            # center the column vertically
-            y = (i - (count - 1) / 2) * spacing_y if count > 0 else 0
-            pos[key] = (x, y)
-
-    # Build reverse mapping node -> tasks so we can show hover info for nodes
-    node_to_tasks: dict[str, set[str]] = {k: set() for k in nodes.keys()}
-    for task_idk, members in groups_all.items():
-        for m in members:
-            if m in node_to_tasks:
-                node_to_tasks[m].add(task_idk)
-
-    # Build task components based on shared modules (not entities) so that tasks sharing
-    # only entities can still be separated vertically
-    task_ids = list(modules_by_task.keys())
-    parent: dict[str, str] = {t: t for t in task_ids}
-
-    def find(t: str) -> str:
-        while parent[t] != t:
-            parent[t] = parent[parent[t]]
-            t = parent[t]
-        return t
-
-    def union(a: str, b: str) -> None:
-        ra, rb = find(a), find(b)
-        if ra != rb:
-            parent[rb] = ra
-
-    for i in range(len(task_ids)):
-        for j in range(i + 1, len(task_ids)):
-            ti, tj = task_ids[i], task_ids[j]
-            if modules_by_task.get(ti, set()) & modules_by_task.get(tj, set()):
-                union(ti, tj)
-
-    comp_members: dict[str, set[str]] = {}
-    for t in task_ids:
-        r = find(t)
-        comp_members.setdefault(r, set()).add(t)
-
-    # Fixed vertical stacking of non-overlapping components (tasks that do not share modules)
-    comp_offsets: dict[str, float] = {r: 0.0 for r in comp_members}
-    separation_y = 1.5
-
-    def comp_base_bounds(comp: str) -> tuple[float, float, float, float]:
-        xs: list[float] = []
-        ys: list[float] = []
-        for t in comp_members.get(comp, set()):
-            for k in modules_by_task.get(t, set()):
-                if k in pos:
-                    x, y = pos[k]
-                    xs.append(x)
-                    ys.append(y)
-        if not xs:
-            return 0, 0, 0, 0
-        return min(xs), max(xs), min(ys), max(ys)
-
-    # order components by their leftmost x to keep layout stable
-    ordered_comps = sorted(comp_members.keys(), key=lambda c: comp_base_bounds(c)[0] if comp_base_bounds(c) else 0)
-    current_y = 0.0
-    for comp in ordered_comps:
-        b = comp_base_bounds(comp)
-        if not b:
-            comp_offsets[comp] = current_y
-            continue
-        minx, maxx, miny, maxy = b
-        comp_offsets[comp] = current_y - miny
-        height = maxy - miny
-        current_y += height + separation_y
-
-    # adjusted positions using component offsets; nodes take the offset of their first task (all tasks in a component share offset)
-    pos_use: dict[str, tuple[float, float]] = {}
-    for key, (x, y) in pos.items():
-        comp = None
-        tasks_for_node = sorted(list(node_to_tasks.get(key, set())))
-        for t in tasks_for_node:
-            comp = find(t)
-            break
-        off = comp_offsets.get(comp, 0.0) if comp else 0.0
-        pos_use[key] = (x, y + off)
-
-    # Draw edges as lines and annotations (arrows)
-    edge_x = []
-    edge_y = []
-
-    for src, dst in edges:
-        sx, sy = pos_use.get(src, (0, 0))
-        dx, dy = pos_use.get(dst, (0, 0))
-        # straight line segment
-        edge_x += [sx, dx, None]
-        edge_y += [sy, dy, None]
-
-    fig.add_trace(
-        go.Scatter(
-            x=edge_x,
-            y=edge_y,
-            mode="lines",
-            line=dict(width=1, color="#888"),
-            hoverinfo="none",
-            showlegend=False,
-        )
-    )
-
-    # Node scatter
-    node_x = []
-    node_y = []
-    node_text = []
-    node_color = []
-    node_hovertext = []
-    for key in node_keys:
-        x, y = pos_use[key]
-        node_x.append(x)
-        node_y.append(y)
-        node_text.append(nodes[key]["label"])
-        node_color.append("#1f77b4" if nodes[key]["kind"] == "module" else "#ff7f0e")
-        # hover text: show label and list of associated tasks
-        tasks_for_node = sorted(node_to_tasks.get(key, []))
-        if tasks_for_node:
-            node_hovertext.append(f"{nodes[key]['label']}<br>Tasks: {', '.join(tasks_for_node)}")
-        else:
-            node_hovertext.append(nodes[key]["label"])
-
-    # place labels above nodes for clarity
-    node_textposition = ["top center"] * len(node_x)
-
-    fig.add_trace(
-        go.Scatter(
-            x=node_x,
-            y=node_y,
-            mode="markers+text",
-            text=node_text,
-            textposition=node_textposition,
-            hovertext=node_hovertext,
-            marker=dict(size=28, color=node_color, line=dict(width=1, color="#333")),
-            hoverinfo="text",
-            showlegend=False,
-        )
-    )
-
-    # Add arrow annotations for directed edges
-    for src, dst in edges:
-        sx, sy = pos_use.get(src, (0, 0))
-        dx, dy = pos_use.get(dst, (0, 0))
-        fig.add_annotation(
-            x=dx,
-            y=dy,
-            ax=sx,
-            ay=sy,
-            xref="x",
-            yref="y",
-            axref="x",
-            ayref="y",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=1,
-            opacity=0.6,
-        )
-
-    # Draw grouping bounding boxes for each task (groups may overlap)
-    shapes: list[dict] = []
-    pad_x = 0.7
-    pad_y = 0.6
-    # simple palette for boxes (semi-transparent fills)
-    palette = [
-        "rgba(200,230,255,0.18)",
-        "rgba(200,255,200,0.14)",
-        "rgba(255,230,200,0.12)",
-        "rgba(240,200,255,0.12)",
-        "rgba(255,220,220,0.10)",
+    node_list = sorted((v for v in nodes.values()), key=lambda n: n["id"])
+    edge_list = [
+        (nodes[p]["id"], nodes[c]["id"], p, c)
+        for p, c in edges if p in nodes and c in nodes
     ]
 
-    # track placed label positions so we can avoid overlap
-    placed_labels: list[tuple[float, float]] = []
+    # Tree parent mapping: choose the first inbound edge as the parent.
+    parent_by_id: dict[int, int] = {}
+    for from_id, to_id, _pkey, _ckey in edge_list:
+        if to_id not in parent_by_id:
+            parent_by_id[to_id] = from_id
 
-    for gi, (task_idk, members) in enumerate(modules_by_task.items()):
-        coords = [pos_use[k] for k in members if k in pos_use]
-        if not coords:
-            continue
-        xs = [c[0] for c in coords]
-        ys = [c[1] for c in coords]
-        minx, maxx = min(xs), max(xs)
-        miny, maxy = min(ys), max(ys)
-        fill = palette[gi % len(palette)]
-        shapes.append(
-            dict(
-                type="rect",
-                xref="x",
-                yref="y",
-                x0=minx - pad_x,
-                x1=maxx + pad_x,
-                y0=miny - pad_y,
-                y1=maxy + pad_y,
-                line=dict(color=fill.replace("0.", "1.") if "rgba" in fill else "#888", width=1),
-                fillcolor=fill,
-                layer="below",
-            )
-        )
-        # add a label for the group in the top-left corner of the box
-        label_x = minx - pad_x + 0.1
-        label_y = maxy + pad_y - 0.15
-        # avoid overlaps with previously placed labels by shifting down if necessary
-        # thresholds tuned to typical spacing; adjust if labels still overlap
-        thresh_x = 1.0
-        thresh_y = 0.1
-        shift_y = 0.35
-        # guard iterations to avoid infinite loops
-        for _ in range(50):
-            conflict = False
-            for lx, ly in placed_labels:
-                if abs(label_x - lx) < thresh_x and abs(label_y - ly) < thresh_y:
-                    conflict = True
-                    break
-            if not conflict:
-                break
-            label_y -= shift_y
-        placed_labels.append((label_x, label_y))
+    # Root node
+    d3_nodes: list[dict[str, Any]] = [
+        {
+            "id": 0,
+            "parentId": None,
+            "label": "root",
+            "kind": "root",
+            "subtype": "",
+            "groups": []
+        }
+    ]
 
-        fig.add_annotation(
-            x=label_x,
-            y=label_y,
-            xref="x",
-            yref="y",
-            text=str(task_idk),
-            showarrow=False,
-            align="left",
-            bgcolor="rgba(255,255,255,0.8)",
-            bordercolor="#666",
-            font=dict(size=10),
+    for n in node_list:
+        node_id = int(n["id"])
+        kind = str(n.get("kind") or "module")
+        subtype = str(n.get("subtype") or "")
+        label = str(n.get("label") or n.get("key") or node_id)
+        groups = sorted(str(g) for g in (n.get("groups") or set()) if g)
+        d3_nodes.append(
+            {
+                "id": node_id,
+                "parentId": int(parent_by_id.get(node_id, 0)),
+                "label": label,
+                "kind": kind,
+                "subtype": subtype,
+                "groups": groups,
+            }
         )
 
-    fig.update_layout(
-        xaxis=dict(visible=False),
-        yaxis=dict(visible=False),
-        plot_bgcolor="white",
-        margin=dict(l=20, r=20, t=20, b=20),
-        hovermode="closest",
-        shapes=shapes,
-    )
+    id_to_groups: dict[int, set[str]] = {
+        int(n["id"]): set(n.get("groups") or set()) for n in node_list
+    }
+    task_links: list[dict[str, Any]] = []
+    for from_id, to_id, pkey, ckey in edge_list:
+        # Determine task ownership for this edge.
+        candidate_groups: set[str] = set()
+        if isinstance(pkey, str) and pkey.startswith("task:"):
+            candidate_groups.add(pkey.split(":", 1)[1])
+        elif isinstance(pkey, str) and pkey.startswith("module:mid:"):
+            # module:mid:<task_idk>:...
+            parts = pkey.split(":")
+            if len(parts) >= 3:
+                candidate_groups.add(parts[2])
+        else:
+            candidate_groups = id_to_groups.get(int(from_id), set()) & id_to_groups.get(int(to_id), set())
 
-    return fig
+        task_id = sorted(candidate_groups)[0] if candidate_groups else None
+        if task_id:
+            task_links.append({"source": int(from_id), "target": int(to_id), "task": str(task_id)})
+
+    task_order = sorted({str(t.task_idk) for t, _out in runs_data})
+
+    # Generate a palette sized to the number of tasks. Use HSL spacing for
+    # visually distinct colours and return hex strings.
+    def _generate_palette(n: int) -> list[str]:
+        if n <= 0:
+            return []
+        cols: list[str] = []
+        for i in range(n):
+            h = (i * 360.0 / n) % 360.0
+            r, g, b = colorsys.hls_to_rgb(h / 360.0, 0.55, 0.65)
+            cols.append('#%02x%02x%02x' % (int(r * 255), int(g * 255), int(b * 255)))
+        return cols
+
+    palette = _generate_palette(len(task_order))
+
+    return {
+        "nodes": d3_nodes,
+        "task_links": task_links,
+        "task_order": task_order,
+        "palette": palette
+    }
 
 
 def layout(hours: int | None = None, start: str | None = None, end: str | None = None, sources: str | None = None):
@@ -420,7 +248,33 @@ def layout(hours: int | None = None, start: str | None = None, end: str | None =
     ]
     selected_task_ids = [t.task_idk for t in all_tasks]
 
-    initial_fig = build_lineage_figure(set(selected_task_ids))
+    initial_model = build_lineage_d3_model(set(selected_task_ids))
+    task_order = initial_model.get('task_order') or []
+    palette = initial_model.get('palette')
+    task_name_map = {str(t.task_idk): (t.name if getattr(t, 'name', None) else str(t.task_idk)) for t in all_tasks}
+    legend_children = []
+    for idx, tid in enumerate(task_order):
+        if palette and idx < len(palette):
+            color = palette[idx]
+        else:
+            n = max(len(task_order), 1)
+            h = (idx * 360.0 / n) % 360.0
+            r, g, b = colorsys.hls_to_rgb(h / 360.0, 0.55, 0.65)
+            color = '#%02x%02x%02x' % (int(r * 255), int(g * 255), int(b * 255))
+        label = task_name_map.get(str(tid), str(tid))
+        legend_children.append(html.Div([
+            html.Span(style={
+                'display': 'inline-block', 'width': '14px', 'height': '14px',
+                'backgroundColor': color, 'marginRight': '6px',
+                'verticalAlign': 'middle', 'borderRadius': '3px',
+                'border': '1px solid #ccc'
+            }),
+            html.Span(label, style={'verticalAlign': 'middle', 'fontSize': '0.9em'})
+            ], style={
+                'display': 'inline-flex', 'alignItems': 'center',
+                'marginRight': '12px', 'marginBottom': '6px'
+            }
+        ))
 
     return html.Div(
         className="container-fluid",
@@ -436,15 +290,240 @@ def layout(hours: int | None = None, start: str | None = None, end: str | None =
                     placeholder='Filter tasks',
                 ),
             ]),
-            dcc.Graph(id="lineage-graph", figure=initial_fig),
+            html.Div(className='col-12 pb-1', children=[
+                html.Label('Legend', style={'font-weight': 'normal', 'marginRight': '8px'}),
+                html.Div(id='lineage-legend', children=legend_children, style={'display': 'flex', 'flexWrap': 'wrap', 'alignItems': 'center'})
+            ]),
+            dcc.Store(id="lineage-flow-model", data=initial_model),
+            dcc.Store(id="lineage-d3-rendered", data=None),
+            html.Div(
+                id="lineage-d3-canvas",
+                style={
+                    "position": "relative",
+                    "height": "78vh",
+                    "minHeight": "520px",
+                    "overflow": "auto",
+                },
+            ),
+            html.Div(id="lineage-d3-dummy", style={"display": "none"}),
         ],
     )
 
 
 @dash.callback(
-    Output("lineage-graph", "figure"),
+    Output("lineage-flow-model", "data"),
     Input("lineage-task-filter", "value"),
 )
 def update_lineage_graph(selected_task_ids):
     selected = set(selected_task_ids) if selected_task_ids else None
-    return build_lineage_figure(selected)
+    model = build_lineage_d3_model(selected)
+    return model
+
+dash.clientside_callback(
+    r"""
+async function(model) {
+    console.log('Rendering lineage D3', model);
+    if(!model || !Array.isArray(model.nodes)) {
+        return dash_clientside.no_update;
+    }
+
+    // Assumes D3 is already injected into the Dash environment.
+    const d3ref = (typeof d3 !== 'undefined') ? d3 : null;
+    if(!d3ref) {
+        console.error('D3 library not found');
+        return dash_clientside.no_update;
+    }
+
+    const canvas = document.getElementById('lineage-d3-canvas');
+    if(!canvas) {
+        return dash_clientside.no_update;
+    }
+
+    // Clear existing content.
+    canvas.innerHTML = '';
+
+    const nodes = model.nodes.slice();
+    const byId = new Map(nodes.map((n) => [Number(n.id), n]));
+
+    // Ensure we have a single root for layout only.
+    if(!byId.has(0)) {
+        nodes.unshift({id: 0, parentId: null, label: 'root', kind: 'root', subtype: '', groups: []});
+    }
+
+    let root;
+    try {
+        root = d3ref.stratify()
+            .id((d) => String(d.id))
+            .parentId((d) => (d.parentId == null ? null : String(d.parentId)))(nodes);
+    } catch(e) {
+        console.error('Failed to stratify lineage nodes', e);
+        return dash_clientside.no_update;
+    }
+
+    const margin = {top: 24, right: 24, bottom: 24, left: 24};
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(600, Math.floor(rect.width || 800));
+
+    // Layout: vertical tree.
+    const dx = 86;
+    const dy = 220;
+    const treeLayout = d3ref.tree().nodeSize([dx, dy]);
+    treeLayout(root);
+
+    let x0 = Infinity, x1 = -Infinity;
+    root.each((d) => {
+        if(d.x < x0) x0 = d.x;
+        if(d.x > x1) x1 = d.x;
+    });
+    const height = Math.max(520, Math.floor((x1 - x0) + margin.top + margin.bottom + 40));
+
+    const svg = d3ref.select(canvas)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height)
+        .attr('viewBox', [0, 0, width, height]);
+
+    const g = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top - x0})`);
+
+    const linkGen = d3ref.linkHorizontal()
+        .x((d) => d.y)
+        .y((d) => d.x);
+
+    // Nodes (hide the layout root node)
+    const node = g.append('g')
+        .selectAll('g')
+        .data(root.descendants().filter((d) => {
+            if(!d || !d.data) return false;
+            // Exclude the layout root and any 'task' nodes (tasks are not
+            // represented as visible nodes anymore).
+            const k = String(d.data.kind || '');
+            return k !== 'root' && k !== 'task';
+        }))
+        .join('g')
+        .attr('transform', (d) => `translate(${d.y},${d.x})`);
+
+    const kindClass = (d) => {
+        const k = (d && d.data && d.data.kind) ? String(d.data.kind) : 'module';
+        const s = (d && d.data && d.data.subtype) ? String(d.data.subtype) : '';
+        return `lineage-node lineage-kind-${k} lineage-subtype-${s}`;
+    };
+
+    const fillFor = (d) => {
+        const k = (d && d.data && d.data.kind) ? String(d.data.kind) : 'module';
+        if(k === 'task') return '#ffffff';
+        if(k === 'entity') return '#ffffff';
+        if(k === 'root') return 'transparent';
+        return '#ffffff';
+    };
+
+    // Draw a star for task nodes, circles for others.
+    // Use a square symbol for task nodes (smaller size) instead of a star.
+    const squareSymbol = d3ref.symbol().type(d3ref.symbolSquare).size(280);
+    node.each(function(d) {
+        try {
+            const k = (d && d.data && d.data.kind) ? String(d.data.kind) : 'module';
+            if(k === 'task') {
+                d3ref.select(this)
+                    .append('path')
+                    .attr('d', squareSymbol)
+                    .attr('fill', fillFor(d))
+                    .attr('stroke', '#666')
+                    .attr('stroke-width', 1.5)
+                    .attr('class', kindClass(d));
+            } else {
+                d3ref.select(this)
+                    .append('circle')
+                    .attr('r', (d.data && d.data.kind === 'root') ? 0 : 10)
+                    .attr('fill', fillFor(d))
+                    .attr('stroke', '#666')
+                    .attr('stroke-width', 1.5)
+                    .attr('class', kindClass(d));
+            }
+        } catch(e) {
+            // Fallback to circle if symbol generation fails.
+            d3ref.select(this)
+                .append('circle')
+                .attr('r', 10)
+                .attr('fill', fillFor(d))
+                .attr('stroke', '#666')
+                .attr('stroke-width', 1.5)
+                .attr('class', kindClass(d));
+        }
+    });
+
+    // Place labels below each node and center them. Increase `dy` for extra padding.
+    node.append('text')
+        .attr('dy', '2em')
+        .attr('x', 0)
+        .attr('text-anchor', 'middle')
+        .attr('class', 'small')
+        .text((d) => (d.data && d.data.label) ? String(d.data.label) : String(d.id));
+
+    // Task group bounding boxes removed — bounding boxes disabled.
+    // The previous rendering logic was intentionally removed to simplify
+    // the lineage visualization and avoid overlapping boxes.
+
+    // Per-task colored links.
+    try {
+        const palette = model.palette;
+        const taskOrder = model.task_order;
+        const colorFor = (task) => {
+            const t = String(task);
+            const idx = taskOrder.indexOf(t);
+            if(idx < 0) return '#000000';
+            if(Array.isArray(palette) && idx < palette.length) return palette[idx];
+
+            const n = taskOrder.length || 1;
+            const h = (idx * 360.0 / n) % 360.0;
+            const s = 0.65;
+            const l = 0.55;
+            // HSL -> RGB conversion
+            const hslToHex = (hh, ss, ll) => {
+                const a = ss * Math.min(ll, 1 - ll);
+                const f = (n) => {
+                    const k = (n + hh / 30) % 12;
+                    const color = ll - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+                    return Math.round(255 * color).toString(16).padStart(2, '0');
+                };
+                return `#${f(0)}${f(8)}${f(4)}`;
+            };
+            return hslToHex(h, s, l);
+        };
+
+        const pos = new Map();
+        root.each((d) => {
+            if(d && d.data && d.data.kind !== 'root') {
+                pos.set(Number(d.data.id), {x: d.x, y: d.y});
+            }
+        });
+
+        const links = Array.isArray(model.task_links) ? model.task_links : [];
+        const linkData = links
+            .map((e) => ({
+                task: e.task,
+                source: pos.get(Number(e.source)),
+                target: pos.get(Number(e.target))
+            }))
+            .filter((e) => e.task && e.source && e.target);
+
+        g.append('g')
+            .attr('fill', 'none')
+            .attr('stroke-width', 2)
+            .attr('stroke-opacity', 0.85)
+            .selectAll('path')
+            .data(linkData)
+            .join('path')
+            .attr('stroke', (d) => colorFor(d.task))
+            .attr('d', (d) => linkGen({source: d.source, target: d.target}));
+    } catch(e) {
+        console.warn('Per-task link render failed', e);
+    }
+
+    return Date.now();
+}
+""",
+    Output("lineage-d3-rendered", "data"),
+    Input("lineage-flow-model", "data"),
+    prevent_initial_call=False,
+)

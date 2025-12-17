@@ -24,7 +24,12 @@ initialise(
 app = Dash(__name__,
     title = 'Orcha',
     url_base_pathname=PLOTLY_APP_PATH,
-    external_stylesheets=[ 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css'],
+    external_stylesheets=[
+        'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
+    ],
+    external_scripts=[
+        'https://d3js.org/d3.v7.min.js',
+    ],
     suppress_callback_exceptions=False,
     eager_loading=True,
     use_pages=True,
