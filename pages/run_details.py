@@ -69,7 +69,7 @@ def create_run_detail_rows(run: tasks.RunItem | None):
         run_output = {
             k: v for k, v in run_output.items()
         }
-        run_output = json.dumps(run_output, indent=4)[0:5000].replace("\\n", "   \n")
+        run_output = json.dumps(run_output, indent=4)[0:2000].replace("\\n", "   \n")
     else:
         run_output = 'No output'
 
@@ -184,12 +184,28 @@ def create_run_detail_rows(run: tasks.RunItem | None):
                 html.H6('Output'),
                 html.Pre(
                     run_output,
-                    style={'white-space': 'pre-wrap'}
+                    style={
+                        'white-space': 'pre-wrap',
+                        'height': 'calc(100vh - 520px)',
+                        'overflow': 'auto'
+                    }
                 ),
             ]),
         ]),
         html.Div(className='row', children=[
-            html.Div(className='col', children=[
+            html.Div(className='col-auto', children=[
+                html.Div([
+                    html.Button(
+                        id={
+                            'type': modal_cmp.BUTTON_SHOW_TYPE,
+                            'index': 'rd-show-output-modal'
+                        },
+                        className='btn btn-sm btn-secondary',
+                        children=['Show Full Output']
+                    )
+                ]),
+            ]) if run.output else '',
+            html.Div(className='col-auto', children=[
                 html.Button(
                     id={
                         'type': 'rd-btn-go-to-run',
@@ -200,8 +216,8 @@ def create_run_detail_rows(run: tasks.RunItem | None):
                         'Triggered Task ➡️'
                     ]
                 )
-            ]),
-        ]) if run.output and run.output.get('triggered_run_id') else ''
+            ]) if run.output and run.output.get('triggered_run_id') else '',
+        ])
     ]
 
 
@@ -241,6 +257,14 @@ def layout(run_id: str = ''):
     if run is not None:
         if (run.progress == 'running'):
             interval_ms = 2000
+
+    # prepare full output for modal (untruncated)
+    full_output = 'No output'
+    if run and run.output:
+        try:
+            full_output = json.dumps(run.output, indent=4)
+        except Exception:
+            full_output = str(run.output)
 
     top_dropdown_row = html.Div(className='row content-row no-bkg py-0 align-items-center', children=[
         html.Div(className='col-auto', children=[
@@ -285,6 +309,30 @@ def layout(run_id: str = ''):
                 'box-shadow': '0px 0px 10px 10px rgba(0, 0, 0, 0.1)',
             },
             id_index='rd-cancel-run-modal',
+            show=False
+        ),
+        # Modal to show the full run output (opened by the "Show Full Output" button)
+        modal_cmp.create_modal(
+            inner_html=html.Div([
+                html.H5('Full Run Output'),
+                html.Pre(
+                    full_output,
+                    style={
+                        'white-space': 'pre-wrap',
+                        'maxHeight': '75vh',
+                        'maxWidth': '75vw',
+                        'overflow': 'auto'
+                    }
+                )
+            ]),
+            outer_style={
+                'background-color': 'white',
+                'padding': '20px',
+                'border-radius': '5px',
+                'border': '1px solid lightgray',
+                'box-shadow': '0px 0px 10px 10px rgba(0, 0, 0, 0.1)',
+            },
+            id_index='rd-show-output-modal',
             show=False
         ),
         html.Div(className='col', children=[
