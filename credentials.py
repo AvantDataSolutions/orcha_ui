@@ -11,3 +11,12 @@ ORCHA_CORE_USER = os.environ['ORCHA_CORE_USER']
 ORCHA_CORE_PASSWORD = os.environ['ORCHA_CORE_PASSWORD']
 ORCHA_CORE_SERVER = os.environ['ORCHA_CORE_SERVER']
 ORCHA_CORE_DB = os.environ['ORCHA_CORE_DB']
+
+# Comma-separated list of agent URLs
+ORCHA_AGENT_URLS = [
+    url.strip()
+    for url in (os.getenv('ORCHA_AGENT_URLS') or '').split(',')
+    if url.strip()
+]
+
+ORCHA_PICKLE_KEY = os.getenv('ORCHA_PICKLE_KEY')
