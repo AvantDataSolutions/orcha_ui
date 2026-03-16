@@ -7,6 +7,7 @@ import dash
 from dash import Input, Output, dcc, html
 
 from orcha.core import tasks
+from orcha_ui.utils import summarise_run_output
 from orcha_ui.credentials import PLOTLY_APP_PATH
 
 
@@ -47,6 +48,7 @@ def build_lineage_d3_model(selected_task_ids: set[str] | None = None) -> dict[st
         if not latest_run:
             continue
         out = latest_run.output or {}
+        out = summarise_run_output(out)
         if isinstance(out, dict):
             runs_data.append((task, out))
 
@@ -84,7 +86,7 @@ def build_lineage_d3_model(selected_task_ids: set[str] | None = None) -> dict[st
 
     for task, out in runs_data:
         task_group = str(task.task_idk)
-        run_times = out.get("run_times") or []
+        run_times = out.get("run_times_summary") or []
         if not isinstance(run_times, list) or not run_times:
             continue
 
@@ -328,7 +330,6 @@ def update_lineage_graph(selected_task_ids):
 dash.clientside_callback(
     r"""
 async function(model) {
-    console.log('Rendering lineage D3', model);
     if(!model || !Array.isArray(model.nodes)) {
         return dash_clientside.no_update;
     }

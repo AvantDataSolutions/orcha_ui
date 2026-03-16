@@ -529,7 +529,7 @@ def update_task_list(
 
     # only keep tasks with the selected type
     filtered_tasks = set()
-    if 'all' not in task_types:
+    if task_types and 'all' not in task_types:
         for task in all_tasks:
             for tag in task.task_tags:
                 if tag in task_types:

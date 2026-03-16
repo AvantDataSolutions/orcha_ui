@@ -5,16 +5,17 @@ from datetime import datetime as dt
 from datetime import timedelta as td
 
 import dash
-from dash import dcc, html
+from dash import dcc, html, Input, Output, State, ALL
 
 from orcha.core import tasks
 from orcha_ui.components import modal_cmp
 from orcha_ui.credentials import PLOTLY_APP_PATH
-from orcha_ui.utils import format_dt
+from orcha_ui.utils import format_dt, summarise_run_output
 
 
 def can_read():
     return True
+
 
 
 dash.register_page(
@@ -63,15 +64,16 @@ def create_run_detail_rows(run: tasks.RunItem | None):
     # Output is a dict of unknowns, so we want to truncate each
     # key-value pair to 3000 characters
     # We also want to format the text to be more readable
-    run_output = run.output
-    if run_output:
+    ro_summary = run.output
+    if ro_summary:
+        ro_summary = summarise_run_output(ro_summary)
         # cast to string in the event people log numbers or other types
-        run_output = {
-            k: v for k, v in run_output.items()
+        ro_summary = {
+            k: v for k, v in ro_summary.items()
         }
-        run_output = json.dumps(run_output, indent=4)[0:2000].replace("\\n", "   \n")
+        ro_summary = json.dumps(ro_summary, indent=4)[0:2000].replace("\\n", "   \n")
     else:
-        run_output = 'No output'
+        ro_summary = 'No output'
 
     return [
         html.Div(className='row mb-1 border-bottom', children=[
@@ -183,7 +185,7 @@ def create_run_detail_rows(run: tasks.RunItem | None):
             html.Div(className='col', children=[
                 html.H6('Output'),
                 html.Pre(
-                    run_output,
+                    ro_summary,
                     style={
                         'white-space': 'pre-wrap',
                         'height': 'calc(100vh - 520px)',
@@ -259,12 +261,12 @@ def layout(run_id: str = ''):
             interval_ms = 2000
 
     # prepare full output for modal (untruncated)
-    full_output = 'No output'
+    full_output = 'Not Loaded'
+    has_run_times = False
+
     if run and run.output:
-        try:
-            full_output = json.dumps(run.output, indent=4)
-        except Exception:
-            full_output = str(run.output)
+        full_output = json.dumps(run.output, indent=4)
+        has_run_times = 'run_times' in run.output and isinstance(run.output['run_times'], list)
 
     top_dropdown_row = html.Div(className='row content-row no-bkg py-0 align-items-center', children=[
         html.Div(className='col-auto', children=[
@@ -291,6 +293,7 @@ def layout(run_id: str = ''):
 
     return [
         dcc.Interval(id='rd-update-interval', interval=interval_ms),
+        dcc.Store(id='rd-output-data', data={}, storage_type='memory'),
         html.Div(className='col-auto', children=[
             top_dropdown_row,
         ]),
@@ -314,16 +317,27 @@ def layout(run_id: str = ''):
         # Modal to show the full run output (opened by the "Show Full Output" button)
         modal_cmp.create_modal(
             inner_html=html.Div([
-                html.H5('Full Run Output'),
+                html.Div(className='d-flex justify-content-between align-items-center mb-3', children=[
+                    html.H5('Full Run Output', className='mb-0'),
+                    html.Div([
+                        html.Button(
+                            'View Summarised',
+                            id='rd-toggle-output-view',
+                            className='btn btn-sm btn-secondary',
+                            style={'display': 'inline-block'}
+                        )
+                    ])
+                ]),
                 html.Pre(
                     full_output,
+                    id='rd-modal-output-content',
                     style={
                         'white-space': 'pre-wrap',
                         'maxHeight': '75vh',
                         'maxWidth': '75vw',
                         'overflow': 'auto'
                     }
-                )
+                ),
             ]),
             outer_style={
                 'background-color': 'white',
@@ -404,11 +418,25 @@ def update_runs_dropdown(task_idk, run_id):
         selected_run
     ]
 
+def _get_output_state(run: tasks.RunItem):
+    full_output = json.dumps(
+        run.output, indent=4
+    ) if run.output else 'No output'
+    summarised_output = json.dumps(
+        summarise_run_output(run.output), indent=4
+    ) if run.output else 'No output'
+    return {
+        'full_output': full_output,
+        'summarised_output': summarised_output
+    }
+
+
 # callback to update run details
 @dash.callback(
     dash.Output('rd-col-run-details', 'children', allow_duplicate=True),
     dash.Output('app-location-norefresh', 'search', allow_duplicate=True),
     dash.Output('rd-runs-dropdown', 'options', allow_duplicate=True),
+    dash.Output('rd-output-data', 'data', allow_duplicate=True),
     dash.Input('rd-runs-dropdown', 'value'),
     dash.Input('rd-update-interval', 'n_intervals'),
     prevent_initial_call=True
@@ -423,8 +451,37 @@ def update_run_details(run_idk, n_intervals):
     return [
         create_run_detail_rows(run),
         f'?run_id={run_idk}',
-        get_run_dropdown_options(run.task_idf)
+        get_run_dropdown_options(run.task_idf),
+        _get_output_state(run)
     ]
+
+# Callback to toggle between summarised and full output in modal
+@dash.callback(
+    Output('rd-modal-output-content', 'children'),
+    Output('rd-toggle-output-view', 'children'),
+    Output('rd-output-data', 'data', allow_duplicate=True),
+    Input('rd-toggle-output-view', 'n_clicks'),
+    Input({'type': modal_cmp.BUTTON_SHOW_TYPE, 'index': 'rd-show-output-modal'}, 'n_clicks'),
+    State('rd-runs-dropdown', 'value'),
+    State('rd-output-data', 'data'),
+    prevent_initial_call=True
+)
+def toggle_output_view(n_clicks, modal_clicks, run_idk, output_data):
+    output_state = output_data
+    if not output_state:
+        run = tasks.RunItem.get(run_idk)
+        if not run:
+            return dash.no_update
+        output_state = _get_output_state(run)
+
+    full_output = output_state.get('full_output', 'No output')
+    summarised_output = output_state.get('summarised_output', 'No output')
+
+    # Toggle between views based on click count (odd = full, even = summarised)
+    if n_clicks and n_clicks % 2 == 1:
+        return full_output, 'View Summarised', output_state
+    else:
+        return summarised_output, 'View Full', output_state
 
 
 # Callback to cancel the current run
