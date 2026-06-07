@@ -1,14 +1,76 @@
-.vscode/*
-*.venv*/
+assets/external/
+.states
+.web
+*.db
+# --------------------
+# Python
+# --------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
 
-*.pyc
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
 
-data/
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
 
+# --------------------
+# Reflex / Pynecone
+# --------------------
+.web/
+.reflex/
+.reflex_cache/
+.states/
+
+# --------------------
+# Node / Frontend
+# --------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --------------------
+# Environment variables
+# --------------------
 .env
-docker-compose.override.yml
+.env.*
+!.env.example
 
-o365_token*
+# --------------------
+# Logs
+# --------------------
+*.log
 
-# Used to ignore specific test files, e.g. test notebooks
-*_ignore.*
+# --------------------
+# Testing / coverage
+# --------------------
+.coverage
+htmlcov/
+.pytest_cache/
+
+# --------------------
+# Secrets
+# --------------------
+*.pem
+*.key
+
+# --------------------
+# IDE / OS
+# --------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
