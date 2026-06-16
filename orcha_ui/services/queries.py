@@ -747,9 +747,13 @@ def build_lineage_model(selected_task_ids: set[str] | None = None) -> dict[str, 
         if not isinstance(run_times, list) or not run_times:
             continue
 
-        prev_key: str | None = None
-        last_source_key: str | None = None
-        task_inserted = False
+        # Collect each stage independently so a task with multiple sources (or
+        # multiple sinks) renders them as parallel siblings in a single column
+        # rather than chaining them end to end across several columns. Only the
+        # transforms keep their run order, forming the chain between the two ends.
+        source_keys: list[str] = []
+        transform_keys: list[str] = []
+        sink_keys: list[str] = []
 
         for index, entry in enumerate(run_times):
             if not isinstance(entry, dict):
@@ -761,39 +765,50 @@ def build_lineage_model(selected_task_ids: set[str] | None = None) -> dict[str, 
                 continue
 
             if _is_source(module_type):
-                if module_entity:
-                    entity_key = f"entity:source:{module_entity}"
-                    ensure_node(entity_key, label=str(module_entity), kind="entity", subtype="source", group=task_group)
                 module_key = f"module:source:{module_idk}"
                 ensure_node(module_key, label=str(module_idk), kind="module", subtype="source", group=task_group)
                 if module_entity:
+                    # Source-side copy of the entity, pinned to the far left.
+                    entity_key = f"entity:source:{module_entity}"
+                    ensure_node(entity_key, label=str(module_entity), kind="entity", subtype="entity", group=task_group)
                     add_edge(entity_key, module_key, task_group)
-                if last_source_key is not None:
-                    add_edge(last_source_key, module_key, task_group)
-                last_source_key = module_key
+                source_keys.append(module_key)
                 continue
-
-            if not task_inserted:
-                prev_key = last_source_key if last_source_key is not None else None
-                task_inserted = True
 
             if _is_sink(module_type):
                 module_key = f"module:sink:{module_idk}"
                 ensure_node(module_key, label=str(module_idk), kind="module", subtype="sink", group=task_group)
-                if prev_key is not None:
-                    add_edge(prev_key, module_key, task_group)
-                prev_key = module_key
                 if module_entity:
+                    # Sink-side copy of the entity, pinned to the far right. An
+                    # entity used by both a source and a sink is deliberately drawn
+                    # twice (entity:source:* on the left, entity:sink:* on the
+                    # right) so edges never have to wrap back across the diagram.
                     entity_key = f"entity:sink:{module_entity}"
-                    ensure_node(entity_key, label=str(module_entity), kind="entity", subtype="sink", group=task_group)
+                    ensure_node(entity_key, label=str(module_entity), kind="entity", subtype="entity", group=task_group)
                     add_edge(module_key, entity_key, task_group)
+                sink_keys.append(module_key)
                 continue
 
             module_key = f"module:mid:{task.task_idk}:{module_idk}:{index}"
             ensure_node(module_key, label=str(module_idk), kind="module", subtype="mid", group=task_group)
-            if prev_key is not None:
-                add_edge(prev_key, module_key, task_group)
-            prev_key = module_key
+            transform_keys.append(module_key)
+
+        # Wire the stages together: every source feeds the first transform, the
+        # transforms chain in run order, and the last transform feeds every sink.
+        # With no transforms, sources fan directly into the sinks.
+        for parent_key, child_key in zip(transform_keys, transform_keys[1:]):
+            add_edge(parent_key, child_key, task_group)
+        downstream_head = transform_keys[0] if transform_keys else None
+        upstream_tail = transform_keys[-1] if transform_keys else None
+        for source_key in source_keys:
+            if downstream_head is not None:
+                add_edge(source_key, downstream_head, task_group)
+            else:
+                for sink_key in sink_keys:
+                    add_edge(source_key, sink_key, task_group)
+        if upstream_tail is not None:
+            for sink_key in sink_keys:
+                add_edge(upstream_tail, sink_key, task_group)
 
     node_list = sorted((value for value in nodes.values()), key=lambda item: int(item["id"]))
     edge_list = [
@@ -883,7 +898,7 @@ _FLOW_NODE_STYLES: dict[str, dict[str, str]] = {
 # Human-readable layer captions for the diagram, in left-to-right order. Used by
 # the page to render the static node-kind legend that explains box colours.
 LINEAGE_NODE_LEGEND: list[dict[str, str]] = [
-    {"label": "Entity", "color": "#0ea5e9", "hint": "Shared data source (left)"},
+    {"label": "Entity", "color": "#0ea5e9", "hint": "Data store (source end, left / sink end, right)"},
     {"label": "Source", "color": "#06b6d4", "hint": "Task ingestion step"},
     {"label": "Transform", "color": "#64748b", "hint": "Intermediate module"},
     {"label": "Sink", "color": "#14b8a6", "hint": "Final output (right)"},
