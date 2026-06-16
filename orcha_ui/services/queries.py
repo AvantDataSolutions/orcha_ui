@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import colorsys
 import json
+from collections import defaultdict
 from datetime import datetime as dt
 from datetime import timedelta as td
 from typing import Any
-
-import plotly.graph_objects as go
 
 from orcha.core import scheduler, tasks
 from orcha.utils import kvdb
@@ -23,9 +22,19 @@ from orcha_ui.services.formatting import (
     summarise_run_output,
     trim_text,
 )
+from orcha_ui.services.types import (
+    KvEntryResult,
+    KvListingResult,
+    LabelValueItem,
+    LineageQueryResult,
+    LogsQueryResult,
+    OverviewQueryResult,
+    RunDetailQueryResult,
+    TaskDetailQueryResult,
+)
 
 
-def list_task_options() -> list[dict[str, str]]:
+def list_task_options() -> list[LabelValueItem]:
     all_tasks = tasks.TaskItem.get_all()
     all_tasks.sort(key=lambda task: (_task_workspace(task), task.name, str(task.task_idk)))
     return [
@@ -37,7 +46,7 @@ def list_task_options() -> list[dict[str, str]]:
     ]
 
 
-def list_run_options(task_id: str | None) -> list[dict[str, str]]:
+def list_run_options(task_id: str | None) -> list[LabelValueItem]:
     if not task_id:
         return []
     task = tasks.TaskItem.get(task_id)
@@ -80,7 +89,7 @@ def get_overview_payload(
     selected_tags: list[str] | None = None,
     selected_workspaces: list[str] | None = None,
     show_disabled: bool = False,
-) -> dict[str, Any]:
+) -> OverviewQueryResult:
     display_end_time = parse_local_dt(end_time_text, dt.now())
     display_start_time = display_end_time - td(hours=max(hours, 1))
 
@@ -167,7 +176,7 @@ def get_overview_payload(
     }
 
 
-def get_task_detail_payload(task_id: str | None) -> dict[str, Any]:
+def get_task_detail_payload(task_id: str | None) -> TaskDetailQueryResult:
     options = list_task_options()
     if not task_id:
         return {
@@ -367,7 +376,7 @@ def delete_task(task_id: str | None) -> tuple[bool, str]:
     return True, "Task deleted"
 
 
-def get_run_detail_payload(run_id: str | None) -> dict[str, Any]:
+def get_run_detail_payload(run_id: str | None) -> RunDetailQueryResult:
     task_options = list_task_options()
     if not run_id:
         return {
@@ -464,7 +473,7 @@ def get_logs_payload(
     end_time_text: str | None,
     selected_sources: list[str] | None,
     limit: int,
-) -> dict[str, Any]:
+) -> LogsQueryResult:
     end_dt = parse_local_dt(end_time_text, dt.now())
     start_dt = parse_local_dt(start_time_text, end_dt - td(hours=6))
     if end_dt < start_dt:
@@ -490,7 +499,7 @@ def get_logs_payload(
     }
 
 
-def get_kv_listing_payload(*, search_text: str | None, limit: int, include_expired: bool) -> dict[str, Any]:
+def get_kv_listing_payload(*, search_text: str | None, limit: int, include_expired: bool) -> KvListingResult:
     try:
         entries = kvdb.list_items(
             storage_type="postgres",
@@ -515,7 +524,7 @@ def get_kv_listing_payload(*, search_text: str | None, limit: int, include_expir
     }
 
 
-def load_kv_entry(key: str | None, encryption_key: str | None) -> dict[str, Any]:
+def load_kv_entry(key: str | None, encryption_key: str | None) -> KvEntryResult:
     key_value = (key or "").strip()
     if not key_value:
         return {
@@ -574,7 +583,7 @@ def save_kv_entry(
     value_mode: str | None,
     expiry_minutes: str | float | int | None,
     encryption_key: str | None,
-) -> dict[str, Any]:
+) -> KvEntryResult:
     key_value = (key or "").strip()
     if not key_value:
         return {"ok": False, "status_message": "A key is required for this action.", "status_tone": "amber"}
@@ -612,7 +621,7 @@ def save_kv_entry(
     }
 
 
-def delete_kv_entry(key: str | None) -> dict[str, Any]:
+def delete_kv_entry(key: str | None) -> KvEntryResult:
     key_value = (key or "").strip()
     if not key_value:
         return {"ok": False, "status_message": "A key is required for this action.", "status_tone": "amber"}
@@ -631,7 +640,7 @@ def delete_kv_entry(key: str | None) -> dict[str, Any]:
     }
 
 
-def get_lineage_payload(selected_task_ids: list[str] | None = None) -> dict[str, Any]:
+def get_lineage_payload(selected_task_ids: list[str] | None = None) -> LineageQueryResult:
     all_tasks = tasks.TaskItem.get_all()
     task_options = [
         {
@@ -670,11 +679,14 @@ def get_lineage_payload(selected_task_ids: list[str] | None = None) -> dict[str,
         ],
         key=lambda row: (row["task_label"], row["source_label"], row["target_label"]),
     )
+    flow_nodes, flow_edges = build_lineage_flow(model)
     return {
         "task_options": task_options,
         "selected_task_ids": selected_values,
         "legend": legend,
         "link_rows": link_rows,
+        "flow_nodes": flow_nodes,
+        "flow_edges": flow_edges,
     }
 
 
@@ -694,6 +706,10 @@ def build_lineage_model(selected_task_ids: set[str] | None = None) -> dict[str, 
 
     nodes: dict[str, dict[str, Any]] = {}
     edges: list[tuple[str, str]] = []
+    # Real set of tasks that traverse each (parent, child) edge. A shared edge
+    # (e.g. a shared entity -> a shared source) genuinely belongs to several
+    # tasks, so we record every one rather than collapsing to a single label.
+    edge_tasks: dict[tuple[str, str], set[str]] = defaultdict(set)
     next_id = 1
 
     def ensure_node(
@@ -721,8 +737,9 @@ def build_lineage_model(selected_task_ids: set[str] | None = None) -> dict[str, 
         }
         return node_id
 
-    def add_edge(parent_key: str, child_key: str) -> None:
+    def add_edge(parent_key: str, child_key: str, task_group: str) -> None:
         edges.append((parent_key, child_key))
+        edge_tasks[(parent_key, child_key)].add(task_group)
 
     for task, output in runs_data:
         task_group = str(task.task_idk)
@@ -750,9 +767,9 @@ def build_lineage_model(selected_task_ids: set[str] | None = None) -> dict[str, 
                 module_key = f"module:source:{module_idk}"
                 ensure_node(module_key, label=str(module_idk), kind="module", subtype="source", group=task_group)
                 if module_entity:
-                    add_edge(entity_key, module_key)
+                    add_edge(entity_key, module_key, task_group)
                 if last_source_key is not None:
-                    add_edge(last_source_key, module_key)
+                    add_edge(last_source_key, module_key, task_group)
                 last_source_key = module_key
                 continue
 
@@ -764,18 +781,18 @@ def build_lineage_model(selected_task_ids: set[str] | None = None) -> dict[str, 
                 module_key = f"module:sink:{module_idk}"
                 ensure_node(module_key, label=str(module_idk), kind="module", subtype="sink", group=task_group)
                 if prev_key is not None:
-                    add_edge(prev_key, module_key)
+                    add_edge(prev_key, module_key, task_group)
                 prev_key = module_key
                 if module_entity:
                     entity_key = f"entity:sink:{module_entity}"
                     ensure_node(entity_key, label=str(module_entity), kind="entity", subtype="sink", group=task_group)
-                    add_edge(module_key, entity_key)
+                    add_edge(module_key, entity_key, task_group)
                 continue
 
             module_key = f"module:mid:{task.task_idk}:{module_idk}:{index}"
             ensure_node(module_key, label=str(module_idk), kind="module", subtype="mid", group=task_group)
             if prev_key is not None:
-                add_edge(prev_key, module_key)
+                add_edge(prev_key, module_key, task_group)
             prev_key = module_key
 
     node_list = sorted((value for value in nodes.values()), key=lambda item: int(item["id"]))
@@ -813,21 +830,24 @@ def build_lineage_model(selected_task_ids: set[str] | None = None) -> dict[str, 
             }
         )
 
-    id_to_groups: dict[int, set[str]] = {int(node["id"]): set(node.get("groups") or set()) for node in node_list}
+    # Each edge carries the full set of tasks that traverse it (``tasks``) plus a
+    # stable representative (``task``) used for colour/label. Highlighting matches
+    # on the set, so an edge shared by several tasks lights up for each of them.
     task_links: list[dict[str, Any]] = []
-    for from_id, to_id, parent_key, child_key in edge_list:
-        candidate_groups: set[str] = set()
-        if isinstance(parent_key, str) and parent_key.startswith("task:"):
-            candidate_groups.add(parent_key.split(":", 1)[1])
-        elif isinstance(parent_key, str) and parent_key.startswith("module:mid:"):
-            parts = parent_key.split(":")
-            if len(parts) >= 3:
-                candidate_groups.add(parts[2])
-        else:
-            candidate_groups = id_to_groups.get(int(from_id), set()) & id_to_groups.get(int(to_id), set())
-        task_id = sorted(candidate_groups)[0] if candidate_groups else None
-        if task_id:
-            task_links.append({"source": int(from_id), "target": int(to_id), "task": str(task_id)})
+    for (parent_key, child_key), task_set in edge_tasks.items():
+        if parent_key not in nodes or child_key not in nodes:
+            continue
+        tasks_sorted = sorted(str(task) for task in task_set if task)
+        if not tasks_sorted:
+            continue
+        task_links.append(
+            {
+                "source": int(nodes[parent_key]["id"]),
+                "target": int(nodes[child_key]["id"]),
+                "task": tasks_sorted[0],
+                "tasks": tasks_sorted,
+            }
+        )
 
     task_order = sorted({str(task.task_idk) for task, _output in runs_data})
     palette = _generate_palette(len(task_order))
@@ -844,56 +864,298 @@ def build_lineage_model(selected_task_ids: set[str] | None = None) -> dict[str, 
     }
 
 
-def build_lineage_figure(model: dict[str, Any]) -> go.Figure:
-    nodes = [node for node in model.get("nodes", []) if int(node.get("id", 0)) != 0]
-    links = model.get("task_links", [])
-    figure = go.Figure()
-    if not nodes:
-        figure.add_annotation(
-            text="No lineage data available for the current task selection.",
-            showarrow=False,
-            x=0.5,
-            y=0.5,
-            xref="paper",
-            yref="paper",
-            font={"size": 16, "color": "#475569"},
-        )
-        figure.update_layout(margin={"l": 20, "r": 20, "t": 40, "b": 20}, paper_bgcolor="rgba(0,0,0,0)")
-        return figure
+# Horizontal gap between layers (columns) and vertical gap between sibling
+# nodes, in React Flow canvas units. Tuned so 180px-wide boxes never overlap.
+_FLOW_COL_GAP = 300
+_FLOW_ROW_GAP = 100
+_FLOW_NODE_WIDTH = 180
 
-    node_ids = [int(node["id"]) for node in nodes]
-    id_to_index = {node_id: index for index, node_id in enumerate(node_ids)}
-    task_palette = {task_id: model.get("palette", [])[index] for index, task_id in enumerate(model.get("task_order", []))}
+# Box colours keyed by node subtype (falling back to kind). Nodes are coloured
+# by *what they are* (entity / source / transform / sink); edges are coloured by
+# *which task* they belong to, so the two encodings never collide.
+_FLOW_NODE_STYLES: dict[str, dict[str, str]] = {
+    "entity": {"bg": "#e0f2fe", "border": "#0ea5e9", "fg": "#0c4a6e"},
+    "source": {"bg": "#cffafe", "border": "#06b6d4", "fg": "#155e75"},
+    "mid": {"bg": "#f1f5f9", "border": "#64748b", "fg": "#1e293b"},
+    "sink": {"bg": "#ccfbf1", "border": "#14b8a6", "fg": "#115e51"},
+}
 
-    figure.add_trace(
-        go.Sankey(
-            arrangement="snap",
-            node={
-                "pad": 18,
-                "thickness": 18,
-                "label": [str(node["label"]) for node in nodes],
-                "color": [_node_color(node) for node in nodes],
-                "line": {"color": "#cbd5e1", "width": 1},
-                "hovertemplate": "%{label}<extra></extra>",
-            },
-            link={
-                "source": [id_to_index[link["source"]] for link in links if link["source"] in id_to_index and link["target"] in id_to_index],
-                "target": [id_to_index[link["target"]] for link in links if link["source"] in id_to_index and link["target"] in id_to_index],
-                "value": [1 for link in links if link["source"] in id_to_index and link["target"] in id_to_index],
-                "color": [task_palette.get(link["task"], "rgba(100,116,139,0.55)") for link in links if link["source"] in id_to_index and link["target"] in id_to_index],
-                "customdata": [model.get("task_labels", {}).get(link["task"], link["task"]) for link in links if link["source"] in id_to_index and link["target"] in id_to_index],
-                "hovertemplate": "%{source.label} → %{target.label}<br>Task: %{customdata}<extra></extra>",
-            },
+# Human-readable layer captions for the diagram, in left-to-right order. Used by
+# the page to render the static node-kind legend that explains box colours.
+LINEAGE_NODE_LEGEND: list[dict[str, str]] = [
+    {"label": "Entity", "color": "#0ea5e9", "hint": "Shared data source (left)"},
+    {"label": "Source", "color": "#06b6d4", "hint": "Task ingestion step"},
+    {"label": "Transform", "color": "#64748b", "hint": "Intermediate module"},
+    {"label": "Sink", "color": "#14b8a6", "hint": "Final output (right)"},
+]
+
+
+def _node_style(style: dict[str, str], state: str) -> dict[str, Any]:
+    """Box CSS for a node given a focus state: 'normal', 'match', or 'dim'."""
+    box: dict[str, Any] = {
+        "background": style["bg"],
+        "color": style["fg"],
+        "border": f"1.5px solid {style['border']}",
+        "borderRadius": "12px",
+        "padding": "8px 14px",
+        "fontSize": "12px",
+        "fontWeight": 600,
+        "width": _FLOW_NODE_WIDTH,
+        "textAlign": "center",
+        "transition": "box-shadow 120ms ease, opacity 120ms ease",
+    }
+    if state == "match":
+        box["opacity"] = 1
+        box["boxShadow"] = f"0 0 0 3px {style['border']}, 0 8px 22px rgba(15, 23, 42, 0.20)"
+    elif state == "dim":
+        box["opacity"] = 0.28
+        box["boxShadow"] = "none"
+    else:
+        box["opacity"] = 1
+        box["boxShadow"] = "0 1px 2px rgba(15, 23, 42, 0.08)"
+    return box
+
+
+def _edge_style(color: str, state: str) -> dict[str, Any]:
+    """Stroke CSS for an edge given a focus state: 'normal', 'match', or 'dim'.
+
+    Every edge carries a faint white casing (drop-shadow) so that where two
+    differently-coloured lines cross or run alongside each other they stay
+    visually separable even before anything is highlighted.
+    """
+    if state == "match":
+        return {
+            "stroke": color,
+            "strokeWidth": 4,
+            "opacity": 1,
+            "filter": f"drop-shadow(0 0 2px {color})",
+        }
+    if state == "dim":
+        return {"stroke": color, "strokeWidth": 1.5, "opacity": 0.1}
+    return {
+        "stroke": color,
+        "strokeWidth": 2.5,
+        "opacity": 1,
+        "filter": "drop-shadow(0 0 1.2px rgba(255, 255, 255, 0.95))",
+    }
+
+
+def _flow_node(node: dict[str, Any], *, x: float, y: float) -> dict[str, Any]:
+    subtype = str(node.get("subtype") or "")
+    kind = str(node.get("kind") or "module")
+    style_key = subtype if subtype in _FLOW_NODE_STYLES else kind
+    style = _FLOW_NODE_STYLES.get(style_key, _FLOW_NODE_STYLES["mid"])
+    tasks_for_node = sorted(str(group) for group in (node.get("groups") or []) if group)
+    return {
+        "id": str(node["id"]),
+        "type": "default",
+        "position": {"x": float(x), "y": float(y)},
+        # data carries everything apply_lineage_focus needs to recompute styling
+        # without re-querying: the style key and the tasks this node belongs to.
+        "data": {
+            "label": str(node.get("label") or node.get("id")),
+            "styleKey": style_key if style_key in _FLOW_NODE_STYLES else "mid",
+            "tasks": tasks_for_node,
+        },
+        "sourcePosition": "right",
+        "targetPosition": "left",
+        "draggable": True,
+        "zIndex": 1,
+        "style": _node_style(style, "normal"),
+    }
+
+
+def _flow_edge(
+    source: int,
+    target: int,
+    color: str,
+    tasks: list[str],
+    task_colors: dict[str, str],
+    offset: int,
+) -> dict[str, Any]:
+    return {
+        "id": f"e{source}-{target}",
+        "source": str(source),
+        "target": str(target),
+        "type": "smoothstep",
+        # Per-task lateral offset spreads otherwise-overlapping parallel risers
+        # so distinct tasks heading to the same node don't perfectly coincide.
+        "pathOptions": {"offset": offset, "borderRadius": 14},
+        # ``tasks`` is every task that traverses this edge; ``color`` is the cached
+        # base (representative) colour and ``taskColors`` maps each task to its own
+        # colour so a highlighted shared edge recolours to the *focused* task.
+        "data": {"tasks": tasks, "color": color, "taskColors": task_colors},
+        "zIndex": 1,
+        "style": _edge_style(color, "normal"),
+        "markerEnd": {"type": "arrowclosed", "color": color, "width": 16, "height": 16},
+    }
+
+
+def apply_lineage_focus(
+    nodes: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    focused_task: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return restyled copies of nodes/edges emphasising one task.
+
+    Pure function of the elements' ``data`` payloads, so it is idempotent and can
+    be re-applied on every hover/click without touching the database. With no
+    focus everything renders normally; with a focus the matching task's nodes and
+    edges are outlined and raised above (higher z-index) everything else, which is
+    dimmed — directly disambiguating overlapping lines.
+    """
+    styled_nodes: list[dict[str, Any]] = []
+    for node in nodes:
+        data = node.get("data", {})
+        if not focused_task:
+            state = "normal"
+        elif focused_task in (data.get("tasks") or []):
+            state = "match"
+        else:
+            state = "dim"
+        style = _FLOW_NODE_STYLES.get(str(data.get("styleKey") or "mid"), _FLOW_NODE_STYLES["mid"])
+        updated = dict(node)
+        updated["style"] = _node_style(style, state)
+        updated["zIndex"] = 20 if state == "match" else (0 if state == "dim" else 1)
+        styled_nodes.append(updated)
+
+    styled_edges: list[dict[str, Any]] = []
+    for edge in edges:
+        data = edge.get("data", {})
+        color = str(data.get("color") or "#94a3b8")
+        if not focused_task:
+            state = "normal"
+        elif focused_task in (data.get("tasks") or []):
+            state = "match"
+            # A shared edge recolours to the focused task so the highlighted path
+            # is a single consistent colour end to end.
+            color = str((data.get("taskColors") or {}).get(focused_task, color))
+        else:
+            state = "dim"
+        updated = dict(edge)
+        updated["style"] = _edge_style(color, state)
+        updated["animated"] = state == "match"
+        updated["zIndex"] = 20 if state == "match" else (0 if state == "dim" else 1)
+        marker_color = color if state != "dim" else "#e2e8f0"
+        updated["markerEnd"] = {"type": "arrowclosed", "color": marker_color, "width": 16, "height": 16}
+        styled_edges.append(updated)
+
+    return styled_nodes, styled_edges
+
+
+def build_lineage_flow(model: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Turn the lineage model into positioned React Flow nodes and edges.
+
+    The layout is a left-to-right layered (Sugiyama-style) DAG:
+
+    * ``layer`` (x column) is the longest path from a root, so entities — which
+      never have an incoming edge — always land in the leftmost column, sources
+      sit just to their right, transforms chain across the middle, and sinks fall
+      out at the far right.
+    * Within a layer, nodes are ordered by the barycentre of their already-placed
+      parents to keep connections roughly horizontal and reduce edge crossings.
+    """
+    raw_nodes = [node for node in model.get("nodes", []) if int(node.get("id", 0)) != 0]
+    if not raw_nodes:
+        return [], []
+
+    node_by_id = {int(node["id"]): node for node in raw_nodes}
+    valid_ids = set(node_by_id)
+
+    task_order = model.get("task_order", [])
+    palette = model.get("palette", [])
+    task_color = {
+        task_id: (palette[index] if index < len(palette) else "#94a3b8")
+        for index, task_id in enumerate(task_order)
+    }
+
+    children: dict[int, list[int]] = defaultdict(list)
+    parents: dict[int, list[int]] = defaultdict(list)
+    edge_pairs: list[tuple[int, int, list[str]]] = []
+    seen_edges: set[tuple[int, int]] = set()
+    for link in model.get("task_links", []):
+        source = int(link["source"])
+        target = int(link["target"])
+        if source not in valid_ids or target not in valid_ids:
+            continue
+        children[source].append(target)
+        parents[target].append(source)
+        key = (source, target)
+        if key not in seen_edges:
+            seen_edges.add(key)
+            edge_tasks_list = [str(t) for t in (link.get("tasks") or [link.get("task", "")]) if t]
+            edge_pairs.append((source, target, edge_tasks_list))
+
+    # Longest-path layering with a cycle guard (lineage graphs are DAGs, but a bad
+    # run could in theory produce a loop — never recurse into the active stack).
+    layer: dict[int, int] = {}
+
+    def compute_layer(node_id: int, stack: frozenset[int]) -> int:
+        if node_id in layer:
+            return layer[node_id]
+        depth = 0
+        for parent in parents.get(node_id, []):
+            if parent in stack:
+                continue
+            depth = max(depth, compute_layer(parent, stack | {node_id}) + 1)
+        layer[node_id] = depth
+        return depth
+
+    for node_id in valid_ids:
+        compute_layer(node_id, frozenset())
+
+    by_layer: dict[int, list[int]] = defaultdict(list)
+    for node_id in valid_ids:
+        by_layer[layer[node_id]].append(node_id)
+
+    order_index: dict[int, int] = {}
+    for current_layer in sorted(by_layer):
+        layer_nodes = by_layer[current_layer]
+        if current_layer == 0:
+            layer_nodes.sort(
+                key=lambda nid: (str(node_by_id[nid].get("subtype", "")), str(node_by_id[nid].get("label", "")))
+            )
+        else:
+            def barycentre(nid: int) -> float:
+                placed = [order_index[p] for p in parents.get(nid, []) if p in order_index]
+                return sum(placed) / len(placed) if placed else 0.0
+
+            layer_nodes.sort(key=lambda nid: (barycentre(nid), str(node_by_id[nid].get("label", ""))))
+        for index, node_id in enumerate(layer_nodes):
+            order_index[node_id] = index
+
+    max_count = max((len(nodes) for nodes in by_layer.values()), default=1)
+    flow_nodes: list[dict[str, Any]] = []
+    for current_layer in sorted(by_layer):
+        layer_nodes = sorted(by_layer[current_layer], key=lambda nid: order_index[nid])
+        # Vertically centre shorter columns so the diagram stays balanced.
+        offset = (max_count - len(layer_nodes)) / 2.0
+        for index, node_id in enumerate(layer_nodes):
+            flow_nodes.append(
+                _flow_node(
+                    node_by_id[node_id],
+                    x=current_layer * _FLOW_COL_GAP,
+                    y=(index + offset) * _FLOW_ROW_GAP,
+                )
+            )
+
+    task_index = {task_id: index for index, task_id in enumerate(task_order)}
+    flow_edges = []
+    for source, target, edge_task_list in edge_pairs:
+        # Representative task drives colour + lateral offset; the full list drives
+        # highlight matching.
+        representative = edge_task_list[0] if edge_task_list else ""
+        flow_edges.append(
+            _flow_edge(
+                source,
+                target,
+                task_color.get(representative, "#94a3b8"),
+                edge_task_list,
+                {task_id: task_color.get(task_id, "#94a3b8") for task_id in edge_task_list},
+                offset=20 + 12 * task_index.get(representative, 0),
+            )
         )
-    )
-    figure.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font={"family": "Work Sans, sans-serif", "size": 12, "color": "#0f172a"},
-        margin={"l": 24, "r": 24, "t": 20, "b": 12},
-        height=760,
-    )
-    return figure
+    return flow_nodes, flow_edges
 
 
 def build_compact_run_slices(task_runs: list[tasks.RunItem]) -> dict[str, Any]:

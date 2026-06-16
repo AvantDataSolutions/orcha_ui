@@ -1,176 +1,33 @@
 from __future__ import annotations
 
 from datetime import datetime as dt, timedelta as td
-from typing import Any, TypedDict
+from typing import Any
 
-import plotly.graph_objects as go
 import reflex as rx
 
 from orcha_ui.services import queries
 from orcha_ui.services.formatting import to_datetime_local
-
-
-class ToggleFilter(TypedDict):
-    label: str
-    active: bool
-
-
-class SchedulerSummary(TypedDict):
-    started: str
-    started_tone: str
-    last_active: str
-    last_active_tone: str
-
-
-class DetailField(TypedDict):
-    label: str
-    value: str
-    tone: str
-    code: bool
-
-
-class RunSliceSegment(TypedDict):
-    kind: str
-    href: str
-    width: str
-    min_width: str
-    height: str
-    color: str
-    tooltip: str
-
-
-class RunSliceData(TypedDict):
-    has_segments: bool
-    segments: list[RunSliceSegment]
-    empty_text: str
-    start_label: str
-    end_label: str
-
-
-class ScheduleOption(TypedDict):
-    label: str
-    value: str
-    config_text: str
-
-
-class ScheduleCard(TypedDict):
-    frequency: str
-    config_text: str
-    trigger_runs: list[str]
-
-
-class RunHistoryRow(TypedDict):
-    run_id: str
-    schedule: str
-    status: str
-    status_tone: str
-    scheduled_time: str
-    start_time: str
-    end_time: str
-    href: str
-
-
-class OverviewTaskCard(TypedDict):
-    task_id: str
-    task_href: str
-    name: str
-    description: str
-    status: str
-    status_tone: str
-    dimmed: bool
-    highlight_error: bool
-    last_active: str
-    last_active_tone: str
-    last_run: str
-    next_scheduled: str
-    active_runs: RunSliceData
-    recent_runs: RunSliceData
-    timeline: RunSliceData
-
-
-class WorkspaceGroup(TypedDict):
-    workspace: str
-    task_cards: list[OverviewTaskCard]
-
-
-class TaskDetailPayload(TypedDict):
-    task_id: str
-    task_href: str
-    name: str
-    description: str
-    status: str
-    status_tone: str
-    toggle_label: str
-    toggle_tone: str
-    fields: list[DetailField]
-    schedule_cards: list[ScheduleCard]
-    schedule_options: list[ScheduleOption]
-    default_schedule_value: str
-    manual_config_text: str
-    recent_runs_timeline: RunSliceData
-    run_history_rows: list[RunHistoryRow]
-
-
-class RunDetailPayload(TypedDict):
-    run_id: str
-    task_id: str
-    task_href: str
-    task_name: str
-    task_description: str
-    task_status: str
-    task_status_tone: str
-    fields: list[DetailField]
-    config_text: str
-    full_output: str
-    summarised_output: str
-    triggered_run_id: str
-    triggered_run_href: str
-    can_cancel: bool
-
-
-class LogEntry(TypedDict):
-    created: str
-    source: str
-    category: str
-    actor: str
-    text: str
-    json: str
-
-
-class KvEntry(TypedDict):
-    key: str
-    type: str
-    encrypted: str
-    size: str
-    expiry: str
-    ttl: str
-    preview: str
-    row_tone: str
-
-
-class LabelValueItem(TypedDict):
-    label: str
-    value: str
-
-
-class LineageTaskFilter(TypedDict):
-    label: str
-    value: str
-    active: bool
-
-
-class LineageLegendItem(TypedDict):
-    task_id: str
-    label: str
-    color: str
-
-
-class LineageLinkRow(TypedDict):
-    task_id: str
-    task_label: str
-    color: str
-    source_label: str
-    target_label: str
+from orcha_ui.services.types import (
+    KvEntry,
+    KvEntryResult,
+    KvListingResult,
+    LabelValueItem,
+    LineageLegendItem,
+    LineageLinkRow,
+    LineageQueryResult,
+    LineageTaskFilter,
+    LogEntry,
+    LogsQueryResult,
+    OverviewQueryResult,
+    RunDetailPayload,
+    RunDetailQueryResult,
+    RunSliceData,
+    SchedulerSummary,
+    TaskDetailPayload,
+    TaskDetailQueryResult,
+    ToggleFilter,
+    WorkspaceGroup,
+)
 
 
 def _empty_task_detail_payload() -> TaskDetailPayload:
@@ -226,15 +83,18 @@ def _parse_int(value: str | int | None, default: int) -> int:
     return parsed
 
 
-def _build_picker(options: list[dict[str, Any]], selected_value: str | None) -> tuple[list[str], dict[str, str], dict[str, str], str]:
+def _build_picker(
+    options: list[LabelValueItem],
+    selected_value: str | None,
+) -> tuple[list[str], dict[str, str], dict[str, str], str]:
     items: list[str] = []
     lookup: dict[str, str] = {}
     reverse_lookup: dict[str, str] = {}
     selected_label = ""
     selected_text = str(selected_value or "")
     for option in options:
-        label = str(option.get("label", ""))
-        value = str(option.get("value", ""))
+        label = option["label"]
+        value = option["value"]
         items.append(label)
         lookup[label] = value
         reverse_lookup[value] = label
@@ -279,23 +139,25 @@ class OverviewState(rx.State):
     def has_workspace_groups(self) -> bool:
         return len(self.workspace_groups) > 0
 
-    def _apply_payload(self, payload: dict[str, Any]) -> None:
-        self.last_refreshed = str(payload.get("last_refreshed", ""))
-        self.display_start_label = str(payload.get("display_start_label", ""))
-        self.display_end_label = str(payload.get("display_end_label", ""))
-        self.scheduler = dict(payload.get("scheduler", self.scheduler))
-        self.workspace_groups = list(payload.get("workspace_groups", []))
-        self.selected_tags = list(payload.get("selected_tags", ["all"]))
-        self.selected_workspaces = list(payload.get("selected_workspaces", ["All Workspaces"]))
-        self.hours_text = str(payload.get("hours", self.hours_text))
-        self.end_time_text = str(payload.get("end_time_text", self.end_time_text))
+    def _apply_payload(self, payload: OverviewQueryResult) -> None:
+        self.last_refreshed = payload["last_refreshed"]
+        self.display_start_label = payload["display_start_label"]
+        self.display_end_label = payload["display_end_label"]
+        self.scheduler = payload["scheduler"]
+        self.workspace_groups = payload["workspace_groups"]
+        self.selected_tags = payload["selected_tags"]
+        self.selected_workspaces = payload["selected_workspaces"]
+        self.hours_text = str(payload["hours"])
+        self.end_time_text = payload["end_time_text"]
+        selected_tag_set = set(self.selected_tags)
         self.tag_filters = [
-            {"label": str(tag), "active": str(tag) in set(self.selected_tags)}
-            for tag in payload.get("available_tags", ["all"])
+            {"label": tag, "active": tag in selected_tag_set}
+            for tag in payload["available_tags"]
         ]
+        selected_workspace_set = set(self.selected_workspaces)
         self.workspace_filters = [
-            {"label": str(workspace), "active": str(workspace) in set(self.selected_workspaces)}
-            for workspace in payload.get("available_workspaces", ["All Workspaces"])
+            {"label": workspace, "active": workspace in selected_workspace_set}
+            for workspace in payload["available_workspaces"]
         ]
 
     def _load_payload(self) -> None:
@@ -381,29 +243,32 @@ class TaskDetailState(rx.State):
     def has_task(self) -> bool:
         return self.exists
 
-    def _apply_payload(self, payload: dict[str, Any]) -> None:
-        items, lookup, _reverse, selected_label = _build_picker(payload.get("task_options", []), payload.get("selected_task_id", ""))
+    def _apply_payload(self, payload: TaskDetailQueryResult) -> None:
+        items, lookup, _reverse, selected_label = _build_picker(
+            payload["task_options"],  # type: ignore[arg-type]
+            payload["selected_task_id"],
+        )
         self.task_picker_items = items
         self.task_picker_lookup = lookup
         self.selected_task_label = selected_label
-        self.exists = bool(payload.get("exists", False))
-        self.task = payload.get("task") or _empty_task_detail_payload()
+        self.exists = payload["exists"]
+        self.task = payload["task"] or _empty_task_detail_payload()
         if self.exists:
-            schedule_options = list(self.task.get("schedule_options", []))
+            schedule_options = self.task["schedule_options"]
             schedule_items, schedule_lookup, _schedule_reverse, selected_schedule_label = _build_picker(
-                schedule_options,
-                self.task.get("default_schedule_value", ""),
+                schedule_options,  # type: ignore[arg-type]
+                self.task["default_schedule_value"],
             )
             self.schedule_picker_items = schedule_items
             self.schedule_picker_lookup = schedule_lookup
             self.selected_schedule_label = selected_schedule_label
             self.schedule_config_lookup = {
-                str(option.get("label", "")): str(option.get("config_text", "{}"))
+                option["label"]: option["config_text"]
                 for option in schedule_options
             }
             self.manual_config_text = self.schedule_config_lookup.get(
                 self.selected_schedule_label,
-                str(self.task.get("manual_config_text", "{}")),
+                self.task["manual_config_text"],
             )
         else:
             self.schedule_picker_items = []
@@ -418,12 +283,16 @@ class TaskDetailState(rx.State):
 
     @rx.event
     def load_from_route(self) -> None:
+        self.status_message = "Ready."
+        self.status_tone = "blue"
         self._load_task(_route_param(self, "task_id"))
 
     @rx.event
-    def select_task_label(self, label: str):
+    def select_task_label(self, label: str) -> None:
         task_id = self.task_picker_lookup.get(label, "")
         self.selected_task_label = label
+        self.status_message = "Ready."
+        self.status_tone = "blue"
         self._load_task(task_id)
         if task_id:
             return rx.redirect(f"/task_details/{task_id}")
@@ -440,7 +309,7 @@ class TaskDetailState(rx.State):
 
     @rx.event
     def toggle_task(self) -> None:
-        task_id = str(self.task.get("task_id", ""))
+        task_id = str(self.task["task_id"])
         if not task_id:
             self.status_message = "Task not found"
             self.status_tone = "red"
@@ -459,7 +328,7 @@ class TaskDetailState(rx.State):
 
     @rx.event
     def confirm_cancel_unstarted(self) -> None:
-        task_id = str(self.task.get("task_id", ""))
+        task_id = str(self.task["task_id"])
         self.show_cancel_modal = False
         self.status_message = queries.cancel_unstarted_runs(task_id)
         self.status_tone = "green"
@@ -467,7 +336,7 @@ class TaskDetailState(rx.State):
 
     @rx.event
     def create_manual_run(self) -> None:
-        task_id = str(self.task.get("task_id", ""))
+        task_id = str(self.task["task_id"])
         schedule_id = self.schedule_picker_lookup.get(self.selected_schedule_label, "")
         message, _run_id = queries.create_manual_run(task_id, schedule_id, self.manual_config_text)
         self.status_message = message
@@ -483,8 +352,8 @@ class TaskDetailState(rx.State):
         self.show_delete_modal = False
 
     @rx.event
-    def confirm_delete_task(self):
-        task_id = str(self.task.get("task_id", ""))
+    def confirm_delete_task(self) -> None:
+        task_id = str(self.task["task_id"])
         self.show_delete_modal = False
         deleted, message = queries.delete_task(task_id)
         self.status_message = message
@@ -513,14 +382,14 @@ class RunDetailState(rx.State):
     def has_run(self) -> bool:
         return self.exists
 
-    def _apply_payload(self, payload: dict[str, Any]) -> None:
+    def _apply_payload(self, payload: RunDetailQueryResult) -> None:
         task_items, task_lookup, _task_reverse, selected_task_label = _build_picker(
-            payload.get("task_options", []),
-            payload.get("selected_task_id", ""),
+            payload["task_options"],  # type: ignore[arg-type]
+            payload["selected_task_id"],
         )
         run_items, run_lookup, _run_reverse, selected_run_label = _build_picker(
-            payload.get("run_options", []),
-            payload.get("selected_run_id", ""),
+            payload["run_options"],  # type: ignore[arg-type]
+            payload["selected_run_id"],
         )
         self.task_picker_items = task_items
         self.task_picker_lookup = task_lookup
@@ -528,8 +397,8 @@ class RunDetailState(rx.State):
         self.run_picker_items = run_items
         self.run_picker_lookup = run_lookup
         self.selected_run_label = selected_run_label
-        self.exists = bool(payload.get("exists", False))
-        self.run = payload.get("run") or _empty_run_detail_payload()
+        self.exists = payload["exists"]
+        self.run = payload["run"] or _empty_run_detail_payload()
         self.show_full_output = False
 
     def _load_run(self, run_id: str | None) -> None:
@@ -537,12 +406,16 @@ class RunDetailState(rx.State):
 
     @rx.event
     def load_from_route(self) -> None:
+        self.status_message = "Ready."
+        self.status_tone = "blue"
         self._load_run(_route_param(self, "run_id"))
 
     @rx.event
-    def select_task_label(self, label: str):
+    def select_task_label(self, label: str) -> None:
         task_id = self.task_picker_lookup.get(label, "")
         self.selected_task_label = label
+        self.status_message = "Ready."
+        self.status_tone = "blue"
         run_options = queries.list_run_options(task_id)
         if not run_options:
             self.run_picker_items = []
@@ -551,14 +424,16 @@ class RunDetailState(rx.State):
             self.exists = False
             self.run = _empty_run_detail_payload()
             return rx.redirect("/run_details")
-        next_run_id = str(run_options[0].get("value", ""))
+        next_run_id = run_options[0]["value"]
         self._load_run(next_run_id)
         return rx.redirect(f"/run_details/{next_run_id}")
 
     @rx.event
-    def select_run_label(self, label: str):
+    def select_run_label(self, label: str) -> None:
         run_id = self.run_picker_lookup.get(label, "")
         self.selected_run_label = label
+        self.status_message = "Ready."
+        self.status_tone = "blue"
         if run_id:
             self._load_run(run_id)
             return rx.redirect(f"/run_details/{run_id}")
@@ -566,7 +441,7 @@ class RunDetailState(rx.State):
 
     @rx.event
     def refresh(self) -> None:
-        run_id = str(self.run.get("run_id", ""))
+        run_id = str(self.run["run_id"])
         self._load_run(run_id)
 
     @rx.event
@@ -583,7 +458,7 @@ class RunDetailState(rx.State):
 
     @rx.event
     def confirm_cancel_run(self) -> None:
-        run_id = str(self.run.get("run_id", ""))
+        run_id = str(self.run["run_id"])
         self.show_cancel_modal = False
         self.status_message = queries.cancel_run(run_id)
         self.status_tone = "green"
@@ -604,18 +479,19 @@ class LogsState(rx.State):
     def has_entries(self) -> bool:
         return len(self.entries) > 0
 
-    def _apply_payload(self, payload: dict[str, Any]) -> None:
-        self.start_time_text = str(payload.get("start_time_text", self.start_time_text))
-        self.end_time_text = str(payload.get("end_time_text", self.end_time_text))
-        self.limit_text = str(payload.get("limit", self.limit_text))
-        self.selected_sources = list(payload.get("selected_sources", ["All Sources"]))
+    def _apply_payload(self, payload: LogsQueryResult) -> None:
+        self.start_time_text = payload["start_time_text"]
+        self.end_time_text = payload["end_time_text"]
+        self.limit_text = str(payload["limit"])
+        self.selected_sources = payload["selected_sources"]
+        selected_set = set(self.selected_sources)
         self.source_filters = [
-            {"label": str(source), "active": str(source) in set(self.selected_sources)}
-            for source in payload.get("all_sources", ["All Sources"])
+            {"label": source, "active": source in selected_set}
+            for source in payload["all_sources"]
         ]
-        self.entries = list(payload.get("entries", []))
-        self.last_refreshed = str(payload.get("last_refreshed", ""))
-        self.refresh_disabled = bool(payload.get("refresh_disabled", False))
+        self.entries = payload["entries"]
+        self.last_refreshed = payload["last_refreshed"]
+        self.refresh_disabled = payload["refresh_disabled"]
 
     def _load_payload(self) -> None:
         payload = queries.get_logs_payload(
@@ -690,13 +566,26 @@ class KvdbState(rx.State):
     def has_entries(self) -> bool:
         return len(self.entries) > 0
 
-    def _apply_listing(self, payload: dict[str, Any]) -> None:
-        self.entries = list(payload.get("entries", []))
-        self.key_items = [str(option.get("value", "")) for option in payload.get("key_options", [])]
-        self.status_message = str(payload.get("status_message", self.status_message))
-        self.status_tone = str(payload.get("status_tone", self.status_tone))
+    def _apply_listing(self, payload: KvListingResult) -> None:
+        self.entries = payload["entries"]
+        self.key_items = [option["value"] for option in payload["key_options"]]
+        self.status_message = payload["status_message"]
+        self.status_tone = payload["status_tone"]
         if self.selected_key and self.selected_key not in self.key_items:
             self.selected_key = ""
+
+    def _apply_entry_result(self, result: KvEntryResult) -> None:
+        self.status_message = result["status_message"]
+        self.status_tone = result["status_tone"]
+        if "metadata" in result:
+            self.metadata = result["metadata"]  # type: ignore[assignment]
+        if "value_text" in result:
+            self.value_text = str(result["value_text"])
+        if "value_mode" in result:
+            self.value_mode = str(result["value_mode"])
+        if "expiry_minutes" in result:
+            expiry = result["expiry_minutes"]
+            self.expiry_minutes_text = "" if expiry in (None, "") else str(expiry)
 
     @rx.event
     def load(self) -> None:
@@ -748,16 +637,7 @@ class KvdbState(rx.State):
     @rx.event
     def load_entry(self) -> None:
         result = queries.load_kv_entry(self.key_input, self.encryption_key)
-        self.status_message = str(result.get("status_message", self.status_message))
-        self.status_tone = str(result.get("status_tone", self.status_tone))
-        self.metadata = list(result.get("metadata", self.metadata))
-        if "value_text" in result:
-            self.value_text = str(result.get("value_text", ""))
-        if "value_mode" in result:
-            self.value_mode = str(result.get("value_mode", self.value_mode))
-        if "expiry_minutes" in result:
-            expiry_minutes = result.get("expiry_minutes")
-            self.expiry_minutes_text = "" if expiry_minutes in (None, "") else str(expiry_minutes)
+        self._apply_entry_result(result)
 
     @rx.event
     def save_entry(self) -> None:
@@ -768,18 +648,14 @@ class KvdbState(rx.State):
             expiry_minutes=self.expiry_minutes_text,
             encryption_key=self.encryption_key,
         )
-        self.status_message = str(result.get("status_message", self.status_message))
-        self.status_tone = str(result.get("status_tone", self.status_tone))
-        self.metadata = list(result.get("metadata", self.metadata))
+        self._apply_entry_result(result)
         self.load()
 
     @rx.event
     def delete_entry(self) -> None:
         result = queries.delete_kv_entry(self.key_input)
-        self.status_message = str(result.get("status_message", self.status_message))
-        self.status_tone = str(result.get("status_tone", self.status_tone))
-        self.metadata = list(result.get("metadata", self.metadata))
-        if bool(result.get("ok", False)):
+        self._apply_entry_result(result)
+        if result["ok"]:
             self.value_text = ""
         self.load()
 
@@ -789,22 +665,45 @@ class LineageState(rx.State):
     selected_task_ids: list[str] = []
     legend: list[LineageLegendItem] = []
     link_rows: list[LineageLinkRow] = []
-    figure: go.Figure = go.Figure()
+    flow_nodes: list[dict] = []
+    flow_edges: list[dict] = []
+    base_flow_nodes: list[dict] = []
+    base_flow_edges: list[dict] = []
+    focused_task: str = ""
+    pinned_task: str = ""
 
-    def _apply_payload(self, payload: dict[str, Any]) -> None:
-        selected_ids = list(payload.get("selected_task_ids", []))
+    @rx.var
+    def has_flow(self) -> bool:
+        return len(self.flow_nodes) > 0
+
+    def _restyle(self) -> None:
+        self.flow_nodes, self.flow_edges = queries.apply_lineage_focus(
+            self.base_flow_nodes, self.base_flow_edges, self.focused_task
+        )
+
+    def _apply_payload(self, payload: LineageQueryResult) -> None:
+        selected_ids = payload["selected_task_ids"]
         self.selected_task_ids = selected_ids
+        selected_set = set(selected_ids)
         self.task_filters = [
             {
-                "label": str(option.get("label", "")),
-                "value": str(option.get("value", "")),
-                "active": str(option.get("value", "")) in set(selected_ids),
+                "label": option["label"],
+                "value": option["value"],
+                "active": option["value"] in selected_set,
             }
-            for option in payload.get("task_options", [])
+            for option in payload["task_options"]
         ]
-        self.legend = list(payload.get("legend", []))
-        self.link_rows = list(payload.get("link_rows", []))
-        self.figure = payload.get("figure", go.Figure())
+        self.legend = payload["legend"]
+        self.link_rows = payload["link_rows"]
+        self.base_flow_nodes = payload["flow_nodes"]
+        self.base_flow_edges = payload["flow_edges"]
+        # Drop any focus/pin that no longer maps to a visible task, then restyle.
+        available = {item["task_id"] for item in self.legend}
+        if self.pinned_task not in available:
+            self.pinned_task = ""
+        if self.focused_task not in available:
+            self.focused_task = ""
+        self._restyle()
 
     def _load_payload(self) -> None:
         self._apply_payload(queries.get_lineage_payload(self.selected_task_ids))
@@ -828,13 +727,48 @@ class LineageState(rx.State):
 
     @rx.event
     def select_all(self) -> None:
-        self.selected_task_ids = [str(item.get("value", "")) for item in self.task_filters]
+        self.selected_task_ids = [item["value"] for item in self.task_filters]
         self._load_payload()
 
     @rx.event
     def clear_all(self) -> None:
         self.selected_task_ids = []
         self._load_payload()
+
+    @rx.event
+    def hover_task(self, task_id: str) -> None:
+        # Hover only previews a highlight; a pinned task keeps precedence.
+        if self.pinned_task:
+            return
+        if self.focused_task != task_id:
+            self.focused_task = task_id
+            self._restyle()
+
+    @rx.event
+    def unhover_task(self) -> None:
+        if self.pinned_task:
+            return
+        if self.focused_task:
+            self.focused_task = ""
+            self._restyle()
+
+    @rx.event
+    def toggle_pin_task(self, task_id: str) -> None:
+        # Click to lock a task's highlight on; click again (or the focused node)
+        # to release it.
+        if self.pinned_task == task_id:
+            self.pinned_task = ""
+            self.focused_task = ""
+        else:
+            self.pinned_task = task_id
+            self.focused_task = task_id
+        self._restyle()
+
+    @rx.event
+    def clear_focus(self) -> None:
+        self.pinned_task = ""
+        self.focused_task = ""
+        self._restyle()
 
 
 __all__ = [

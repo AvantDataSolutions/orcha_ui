@@ -11,14 +11,14 @@ def app_shell(*, active_route: str, page_title: str, page_description: str, cont
             _sidebar(active_route),
             rx.box(
                 rx.vstack(
-                    rx.box(
-                        rx.heading(page_title, size="7", color="#0f172a"),
-                        rx.text(page_description, color="#475569", size="2"),
-                        background="linear-gradient(135deg, rgba(8,145,178,0.14), rgba(15,23,42,0.02))",
-                        border="1px solid rgba(8,145,178,0.15)",
-                        border_radius="24px",
-                        padding="1.05rem 1.15rem",
+                    rx.vstack(
+                        rx.heading(page_title, size="6", color="#0f172a", weight="bold"),
+                        rx.text(page_description, color="#64748b", size="2"),
+                        spacing="1",
+                        padding_bottom="0.85rem",
+                        border_bottom="1px solid rgba(148,163,184,0.2)",
                         width="100%",
+                        align_items="start",
                     ),
                     content,
                     spacing="4",
@@ -26,7 +26,7 @@ def app_shell(*, active_route: str, page_title: str, page_description: str, cont
                     width="100%",
                 ),
                 flex="1",
-                padding="1rem 1.1rem 1.5rem 0.85rem",
+                padding="1.1rem 1.1rem 1.5rem 1rem",
                 overflow="auto",
                 min_height="100vh",
             ),
@@ -44,8 +44,8 @@ def _sidebar(active_route: str) -> rx.Component:
         rx.vstack(
             rx.link(
                 rx.hstack(
-                    rx.image(src="/orcha-logo-round.png", width="58px", height="58px", object_fit="contain"),
-                    rx.image(src="/orcha-font-black.png", width="138px", height="auto", object_fit="contain"),
+                    rx.image(src="/orcha-logo-round.png", width="52px", height="52px", object_fit="contain"),
+                    rx.image(src="/orcha-font-black.png", width="130px", height="auto", object_fit="contain"),
                     spacing="3",
                     align="center",
                     width="100%",
@@ -53,19 +53,15 @@ def _sidebar(active_route: str) -> rx.Component:
                 href="/overview",
                 text_decoration="none",
             ),
-            rx.text(USER_LABEL, color="#64748b", size="1"),
             rx.vstack(*[_nav_item(item, active_route) for item in NAV_ITEMS], spacing="1", width="100%"),
             rx.spacer(),
             rx.box(
-                rx.text("Reflex Migration", size="2", color="#0891b2", text_transform="uppercase", letter_spacing="0.08em"),
-                rx.text("Orcha operational UI rebuilt on Reflex.", color="#475569", size="2"),
-                background_color="rgba(255,255,255,0.72)",
-                border="1px solid rgba(148,163,184,0.22)",
-                border_radius="18px",
-                padding="0.85rem 0.9rem",
+                rx.text(USER_LABEL, color="#94a3b8", size="1"),
+                border_top="1px solid rgba(148,163,184,0.18)",
+                padding_top="0.65rem",
                 width="100%",
             ),
-            spacing="3",
+            spacing="4",
             align_items="stretch",
             width="100%",
         ),
@@ -84,7 +80,7 @@ def _nav_item(item: dict[str, str], active_route: str) -> rx.Component:
     is_active = active_route == item["route"]
     return rx.link(
         rx.hstack(
-            rx.image(src=item["image"], width="2rem", height="2rem", border_radius="12px"),
+            rx.image(src=item["image"], width="1.5rem", height="1.5rem", border_radius="8px"),
             rx.vstack(
                 rx.text(item["name"], color="#0f172a", weight="medium", size="2"),
                 rx.text(item["description"], color="#64748b", size="1"),

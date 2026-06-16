@@ -13,15 +13,10 @@ initialise_orcha()
 app = rx.App(
     stylesheets=[
         "https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css",
+        "https://cdn.jsdelivr.net/npm/@xyflow/react@12.8.6/dist/style.css",
         "/custom.css",
         "/dash_loading.css",
     ],
-    theme=rx.theme(
-        appearance="light",
-        accent_color="cyan",
-        gray_color="slate",
-        radius="medium",
-    ),
     style={
         "font_family": "'Work Sans', 'Segoe UI', sans-serif",
         "background": "linear-gradient(180deg, #eff6ff 0%, #f8fafc 35%, #ffffff 100%)",
