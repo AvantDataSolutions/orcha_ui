@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from orcha_ui.constants import NAV_ITEMS, USER_LABEL
+from orcha_ui.constants import APP_VERSION, APP_VERSION_TONE, NAV_ITEMS, USER_LABEL
 
 
 def app_shell(*, active_route: str, page_title: str, page_description: str, content: rx.Component) -> rx.Component:
@@ -39,6 +39,19 @@ def app_shell(*, active_route: str, page_title: str, page_description: str, cont
     )
 
 
+def _version_badge() -> rx.Component:
+    return rx.hstack(
+        rx.text(APP_VERSION, color="#475569", weight="bold", size="1"),
+        rx.cond(
+            APP_VERSION_TONE != "",
+            rx.text(APP_VERSION_TONE, color="#b45309", weight="medium", size="1"),
+            rx.fragment(),
+        ),
+        spacing="2",
+        align="baseline",
+    )
+
+
 def _sidebar(active_route: str) -> rx.Component:
     return rx.box(
         rx.vstack(
@@ -61,6 +74,7 @@ def _sidebar(active_route: str) -> rx.Component:
                 padding_top="0.65rem",
                 width="100%",
             ),
+            _version_badge(),
             spacing="4",
             align_items="stretch",
             width="100%",

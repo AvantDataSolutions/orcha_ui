@@ -47,6 +47,9 @@ NAV_ITEMS = [
 
 USER_LABEL = "User: user@orcha"
 
+APP_VERSION = "v2"
+APP_VERSION_TONE = "beta"  # shown next to APP_VERSION; set to "" to hide the tag
+
 RUN_STATUS_COLORS = {
     "success": "#16a34a",
     "failed": "#dc2626",
