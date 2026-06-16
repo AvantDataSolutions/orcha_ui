@@ -251,6 +251,8 @@ class KvEntryResult(_KvEntryResultBase, total=False):
 class LineageQueryResult(TypedDict):
     selected_task_ids: list[str]
     task_options: list[LabelValueItem]
+    task_workspaces: dict[str, str]
+    available_workspaces: list[str]
     legend: list[LineageLegendItem]
     link_rows: list[LineageLinkRow]
     flow_nodes: list[dict[str, Any]]

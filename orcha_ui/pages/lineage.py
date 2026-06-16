@@ -106,8 +106,33 @@ def lineage_page() -> rx.Component:
         section_card(
             rx.hstack(
                 rx.button("Select All", on_click=LineageState.select_all, color_scheme="cyan"),
-                rx.button("Clear", on_click=LineageState.clear_all, variant="soft", color_scheme="gray"),
+                rx.button("Select None", on_click=LineageState.clear_all, variant="soft", color_scheme="gray"),
                 spacing="3",
+            ),
+            rx.cond(
+                LineageState.available_workspaces,
+                rx.hstack(
+                    rx.text("Workspace:", color="#64748b", size="2", flex_shrink="0"),
+                    rx.flex(
+                        rx.foreach(
+                            LineageState.available_workspaces,
+                            lambda workspace: rx.button(
+                                workspace,
+                                on_click=LineageState.select_workspace(workspace),
+                                size="1",
+                                variant="soft",
+                                color_scheme="cyan",
+                            ),
+                        ),
+                        wrap="wrap",
+                        gap="0.5rem",
+                        width="100%",
+                    ),
+                    align="center",
+                    spacing="3",
+                    width="100%",
+                ),
+                rx.fragment(),
             ),
             rx.flex(
                 rx.foreach(
@@ -119,7 +144,7 @@ def lineage_page() -> rx.Component:
                 width="100%",
             ),
             title="Task Filter",
-            subtitle="Filter the lineage map to the tasks you want to compare.",
+            subtitle="Filter the lineage map to the tasks you want to compare. Use Workspace to jump to one group of tasks.",
         ),
         section_card(
             _node_kind_legend(),

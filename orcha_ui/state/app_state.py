@@ -663,6 +663,8 @@ class KvdbState(rx.State):
 class LineageState(rx.State):
     task_filters: list[LineageTaskFilter] = []
     selected_task_ids: list[str] = []
+    task_workspaces: dict[str, str] = {}
+    available_workspaces: list[str] = []
     legend: list[LineageLegendItem] = []
     link_rows: list[LineageLinkRow] = []
     flow_nodes: list[dict] = []
@@ -693,6 +695,8 @@ class LineageState(rx.State):
             }
             for option in payload["task_options"]
         ]
+        self.task_workspaces = payload["task_workspaces"]
+        self.available_workspaces = payload["available_workspaces"]
         self.legend = payload["legend"]
         self.link_rows = payload["link_rows"]
         self.base_flow_nodes = payload["flow_nodes"]
@@ -733,6 +737,17 @@ class LineageState(rx.State):
     @rx.event
     def clear_all(self) -> None:
         self.selected_task_ids = []
+        self._load_payload()
+
+    @rx.event
+    def select_workspace(self, workspace: str) -> None:
+        # Narrow the diagram to a single workspace — the quickest way to cut the
+        # clutter when many tasks are selected at once.
+        self.selected_task_ids = [
+            task_id
+            for task_id, task_workspace in self.task_workspaces.items()
+            if task_workspace == workspace
+        ]
         self._load_payload()
 
     @rx.event

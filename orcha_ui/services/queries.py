@@ -642,6 +642,7 @@ def delete_kv_entry(key: str | None) -> KvEntryResult:
 
 def get_lineage_payload(selected_task_ids: list[str] | None = None) -> LineageQueryResult:
     all_tasks = tasks.TaskItem.get_all()
+    all_tasks.sort(key=lambda task: (_task_workspace(task), task.name, str(task.task_idk)))
     task_options = [
         {
             "label": f"{task.name} ({task.task_idk})",
@@ -649,6 +650,9 @@ def get_lineage_payload(selected_task_ids: list[str] | None = None) -> LineageQu
         }
         for task in all_tasks
     ]
+    # Workspace metadata powers the "select by workspace" shortcuts on the page.
+    task_workspaces = {str(task.task_idk): _task_workspace(task) for task in all_tasks}
+    available_workspaces = sorted(set(task_workspaces.values()), key=lambda value: value.lower())
     selected_values = [str(task.task_idk) for task in all_tasks] if selected_task_ids is None else list(selected_task_ids)
     selected_set = set(selected_values) if selected_task_ids is not None else None
     model = build_lineage_model(selected_set)
@@ -683,6 +687,8 @@ def get_lineage_payload(selected_task_ids: list[str] | None = None) -> LineageQu
     return {
         "task_options": task_options,
         "selected_task_ids": selected_values,
+        "task_workspaces": task_workspaces,
+        "available_workspaces": available_workspaces,
         "legend": legend,
         "link_rows": link_rows,
         "flow_nodes": flow_nodes,
@@ -1123,19 +1129,31 @@ def build_lineage_flow(model: dict[str, Any]) -> tuple[list[dict[str, Any]], lis
     for node_id in valid_ids:
         by_layer[layer[node_id]].append(node_id)
 
+    # ``task_rank`` is the average position (in task_order) of every task a node
+    # belongs to. Ordering each column by it first keeps a task's nodes in a
+    # stable horizontal band across the whole diagram, so a single task's path
+    # runs roughly straight instead of zig-zagging — which is what dominates the
+    # visible line length. Nodes shared by several tasks settle between their
+    # bands. Barycentre of already-placed parents then breaks ties to reduce
+    # crossings within a band.
+    task_pos = {task_id: index for index, task_id in enumerate(task_order)}
+
+    def task_rank(nid: int) -> float:
+        groups = node_by_id[nid].get("groups") or []
+        ranks = [task_pos[group] for group in groups if group in task_pos]
+        return sum(ranks) / len(ranks) if ranks else float(len(task_pos))
+
     order_index: dict[int, int] = {}
     for current_layer in sorted(by_layer):
         layer_nodes = by_layer[current_layer]
-        if current_layer == 0:
-            layer_nodes.sort(
-                key=lambda nid: (str(node_by_id[nid].get("subtype", "")), str(node_by_id[nid].get("label", "")))
-            )
-        else:
-            def barycentre(nid: int) -> float:
-                placed = [order_index[p] for p in parents.get(nid, []) if p in order_index]
-                return sum(placed) / len(placed) if placed else 0.0
 
-            layer_nodes.sort(key=lambda nid: (barycentre(nid), str(node_by_id[nid].get("label", ""))))
+        def barycentre(nid: int) -> float:
+            placed = [order_index[p] for p in parents.get(nid, []) if p in order_index]
+            return sum(placed) / len(placed) if placed else task_rank(nid)
+
+        layer_nodes.sort(
+            key=lambda nid: (task_rank(nid), barycentre(nid), str(node_by_id[nid].get("label", "")))
+        )
         for index, node_id in enumerate(layer_nodes):
             order_index[node_id] = index
 
@@ -1154,7 +1172,6 @@ def build_lineage_flow(model: dict[str, Any]) -> tuple[list[dict[str, Any]], lis
                 )
             )
 
-    task_index = {task_id: index for index, task_id in enumerate(task_order)}
     flow_edges = []
     for source, target, edge_task_list in edge_pairs:
         # Representative task drives colour + lateral offset; the full list drives
@@ -1167,7 +1184,7 @@ def build_lineage_flow(model: dict[str, Any]) -> tuple[list[dict[str, Any]], lis
                 task_color.get(representative, "#94a3b8"),
                 edge_task_list,
                 {task_id: task_color.get(task_id, "#94a3b8") for task_id in edge_task_list},
-                offset=20 + 12 * task_index.get(representative, 0),
+                offset=20 + 12 * task_pos.get(representative, 0),
             )
         )
     return flow_nodes, flow_edges
