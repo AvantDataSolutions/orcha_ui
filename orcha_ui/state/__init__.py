@@ -1,4 +1,4 @@
-from .app_state import KvdbState, LineageState, LogsState, OverviewState, RunDetailState, TaskDetailState
+from .app_state import KvdbState, LineageState, LogsState, OverviewState, RunDetailState, TaskDetailState, ThreadsState
 
 __all__ = [
     "KvdbState",
@@ -7,4 +7,5 @@ __all__ = [
     "OverviewState",
     "RunDetailState",
     "TaskDetailState",
+    "ThreadsState",
 ]

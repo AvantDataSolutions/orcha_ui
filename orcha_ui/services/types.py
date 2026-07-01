@@ -161,6 +161,41 @@ class KvEntry(TypedDict):
     row_tone: str
 
 
+class ThreadRow(TypedDict):
+    name: str
+    group: str
+    state: str
+    state_tone: str
+    last_heartbeat: str
+    last_tick: str
+    interval: str
+    restart_count: int
+    error_count: int
+    consecutive_errors: int
+    last_error: str
+    last_error_at: str
+
+
+class ThreadInstanceGroup(TypedDict):
+    instance_id: str
+    online: bool
+    status_label: str
+    status_tone: str
+    updated: str
+    total: int
+    unhealthy: int
+    threads: list[ThreadRow]
+
+
+class ThreadsQueryResult(TypedDict):
+    instances: list[ThreadInstanceGroup]
+    total_threads: int
+    unhealthy_threads: int
+    instance_count: int
+    last_refreshed: str
+    has_data: bool
+
+
 class LineageTaskFilter(TypedDict):
     label: str
     value: str

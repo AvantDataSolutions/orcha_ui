@@ -7,7 +7,7 @@ from datetime import datetime as dt
 from datetime import timedelta as td
 from typing import Any
 
-from orcha.core import scheduler, tasks
+from orcha.core import scheduler, tasks, thread_monitor
 from orcha.utils import kvdb
 from orcha.utils.log import LogManager
 from orcha_ui.constants import NODE_KIND_COLORS
@@ -31,7 +31,25 @@ from orcha_ui.services.types import (
     OverviewQueryResult,
     RunDetailQueryResult,
     TaskDetailQueryResult,
+    ThreadsQueryResult,
 )
+
+# An instance whose health snapshot hasn't been updated within this window is
+# treated as offline (the supervisor persists every ~10s by default).
+_THREAD_INSTANCE_ONLINE_WINDOW = td(seconds=60)
+
+# State -> badge tone for the threads page.
+_THREAD_STATE_TONES = {
+    "running": "green",
+    "idle": "slate",
+    "starting": "blue",
+    "errored": "amber",
+    "stalled": "amber",
+    "crashed": "red",
+    "stopped": "slate",
+}
+
+_THREAD_UNHEALTHY_STATES = {"errored", "stalled", "crashed"}
 
 
 def list_task_options() -> list[LabelValueItem]:
@@ -1248,6 +1266,99 @@ def build_run_timeline_data(
         "start_label": format_dt(display_start_time),
         "end_label": format_dt(display_end_time),
     }
+
+
+def get_threads_payload() -> ThreadsQueryResult:
+    """
+    Build the payload for the Threads page: the live health of every supervised
+    background thread (scheduler loops, task runner handlers, the supervisor
+    itself), grouped by the process instance reporting them.
+    """
+    now = dt.now()
+    snapshot = thread_monitor.get_health_snapshot()
+
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in snapshot:
+        grouped[str(row.get("instance_id") or "unknown")].append(row)
+
+    instances: list[dict[str, Any]] = []
+    total_threads = 0
+    unhealthy_threads = 0
+    for instance_id in sorted(grouped):
+        rows = grouped[instance_id]
+        updated_at = max(
+            (row.get("updated_at") for row in rows if row.get("updated_at")),
+            default=None,
+        )
+        online = updated_at is not None and updated_at > (now - _THREAD_INSTANCE_ONLINE_WINDOW)
+
+        thread_rows = [_build_thread_row(row, online=online) for row in rows]
+        thread_rows.sort(key=lambda item: (item["group"], item["name"]))
+        instance_unhealthy = sum(
+            1 for row in rows if str(row.get("state")) in _THREAD_UNHEALTHY_STATES
+        )
+        total_threads += len(rows)
+        unhealthy_threads += instance_unhealthy
+
+        if not online:
+            status_label, status_tone = "Offline", "red"
+        elif instance_unhealthy:
+            status_label, status_tone = f"{instance_unhealthy} unhealthy", "amber"
+        else:
+            status_label, status_tone = "Healthy", "green"
+
+        instances.append(
+            {
+                "instance_id": instance_id,
+                "online": online,
+                "status_label": status_label,
+                "status_tone": status_tone,
+                "updated": f"{seconds_only(now - updated_at)} ago" if updated_at else "N/A",
+                "total": len(rows),
+                "unhealthy": instance_unhealthy,
+                "threads": thread_rows,
+            }
+        )
+
+    # Show offline instances last so live processes are at the top.
+    instances.sort(key=lambda item: (not item["online"], item["instance_id"]))
+
+    return {
+        "instances": instances,
+        "total_threads": total_threads,
+        "unhealthy_threads": unhealthy_threads,
+        "instance_count": len(instances),
+        "last_refreshed": seconds_only(now),
+        "has_data": bool(snapshot),
+    }
+
+
+def _build_thread_row(row: dict[str, Any], *, online: bool) -> dict[str, Any]:
+    state = str(row.get("state") or "unknown")
+    # A thread on an offline instance is only as trustworthy as its last report,
+    # so visually de-emphasise its (now stale) state.
+    state_tone = "slate" if not online else _THREAD_STATE_TONES.get(state, "slate")
+    interval = row.get("interval_s")
+    return {
+        "name": str(row.get("thread_name") or ""),
+        "group": str(row.get("thread_group") or ""),
+        "state": state,
+        "state_tone": state_tone,
+        "last_heartbeat": _ago(row.get("last_heartbeat")),
+        "last_tick": _ago(row.get("last_tick_at")),
+        "interval": f"{interval:g}s" if isinstance(interval, (int, float)) else "N/A",
+        "restart_count": int(row.get("restart_count") or 0),
+        "error_count": int(row.get("error_count") or 0),
+        "consecutive_errors": int(row.get("consecutive_errors") or 0),
+        "last_error": str(row.get("last_error") or "None"),
+        "last_error_at": format_dt(row.get("last_error_at")),
+    }
+
+
+def _ago(value: dt | None) -> str:
+    if value is None:
+        return "N/A"
+    return f"{seconds_only(dt.now() - value)} ago"
 
 
 def _build_scheduler_summary() -> dict[str, Any]:

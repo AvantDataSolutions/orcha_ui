@@ -25,6 +25,8 @@ from orcha_ui.services.types import (
     SchedulerSummary,
     TaskDetailPayload,
     TaskDetailQueryResult,
+    ThreadInstanceGroup,
+    ThreadsQueryResult,
     ToggleFilter,
     WorkspaceGroup,
 )
@@ -660,6 +662,39 @@ class KvdbState(rx.State):
         self.load()
 
 
+class ThreadsState(rx.State):
+    instances: list[ThreadInstanceGroup] = []
+    total_threads: int = 0
+    unhealthy_threads: int = 0
+    instance_count: int = 0
+    last_refreshed: str = ""
+    has_data: bool = False
+
+    @rx.var
+    def has_instances(self) -> bool:
+        return len(self.instances) > 0
+
+    @rx.var
+    def health_tone(self) -> str:
+        return "red" if self.unhealthy_threads > 0 else "green"
+
+    def _apply_payload(self, payload: ThreadsQueryResult) -> None:
+        self.instances = payload["instances"]
+        self.total_threads = payload["total_threads"]
+        self.unhealthy_threads = payload["unhealthy_threads"]
+        self.instance_count = payload["instance_count"]
+        self.last_refreshed = payload["last_refreshed"]
+        self.has_data = payload["has_data"]
+
+    @rx.event
+    def load(self) -> None:
+        self._apply_payload(queries.get_threads_payload())
+
+    @rx.event
+    def refresh(self) -> None:
+        self._apply_payload(queries.get_threads_payload())
+
+
 class LineageState(rx.State):
     task_filters: list[LineageTaskFilter] = []
     selected_task_ids: list[str] = []
@@ -793,4 +828,5 @@ __all__ = [
     "OverviewState",
     "RunDetailState",
     "TaskDetailState",
+    "ThreadsState",
 ]

@@ -30,6 +30,13 @@ NAV_ITEMS = [
         "description": "Explore application logs with date range and source filters.",
     },
     {
+        "name": "Threads",
+        "route": "/threads",
+        "image": "/page_imgs/activity.svg",
+        "title": "Threads | Orcha",
+        "description": "Health and lifecycle of supervised background threads.",
+    },
+    {
         "name": "Lineage",
         "route": "/lineage",
         "image": "/page_imgs/lineage.png",

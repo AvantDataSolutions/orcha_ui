@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import reflex as rx
 
-from orcha_ui.pages import kvdb_page, lineage_page, logs_page, overview_page, run_details_page, task_details_page
+from orcha_ui.pages import kvdb_page, lineage_page, logs_page, overview_page, run_details_page, task_details_page, threads_page
 from orcha_ui.services.bootstrap import initialise_orcha
-from orcha_ui.state import KvdbState, LineageState, LogsState, OverviewState, RunDetailState, TaskDetailState
+from orcha_ui.state import KvdbState, LineageState, LogsState, OverviewState, RunDetailState, TaskDetailState, ThreadsState
 
 
 initialise_orcha()
@@ -31,5 +31,6 @@ app.add_page(run_details_page, route="/run_details", title="Run Details | Orcha"
 app.add_page(overview_page, route="/", title="Orcha", on_load=OverviewState.load)
 app.add_page(overview_page, route="/overview", title="Overview | Orcha", on_load=OverviewState.load)
 app.add_page(logs_page, route="/logs", title="Logs | Orcha", on_load=LogsState.load)
+app.add_page(threads_page, route="/threads", title="Threads | Orcha", on_load=ThreadsState.load)
 app.add_page(lineage_page, route="/lineage", title="Lineage | Orcha", on_load=LineageState.load)
 app.add_page(kvdb_page, route="/kvdb", title="KVDB Explorer | Orcha", on_load=KvdbState.load)
