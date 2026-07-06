@@ -82,14 +82,6 @@ def logs_page() -> rx.Component:
                         width="8rem",
                     ),
                 ),
-                _control(
-                    "Actions",
-                    rx.hstack(
-                        rx.button("Now", on_click=LogsState.set_now, color_scheme="cyan"),
-                        rx.button("Refresh", on_click=LogsState.refresh, variant="soft", color_scheme="gray"),
-                        spacing="3",
-                    ),
-                ),
                 wrap="wrap",
                 gap="1rem",
                 width="100%",
@@ -138,15 +130,21 @@ def logs_page() -> rx.Component:
             ),
             empty_state("No Logs Found", "No log records matched the selected time range and source filters."),
         ),
-        spacing="5",
+        spacing="3",
         width="100%",
         align_items="stretch",
+    )
+    actions = rx.hstack(
+        rx.button("Now", on_click=LogsState.set_now, color_scheme="cyan", size="2"),
+        rx.button("Refresh", on_click=LogsState.refresh, variant="soft", color_scheme="gray", size="2"),
+        spacing="2",
     )
     return app_shell(
         active_route="/logs",
         page_title="Logs",
         page_description="Operational log explorer with source filtering and explicit time-window control.",
         content=content,
+        actions=actions,
     )
 
 

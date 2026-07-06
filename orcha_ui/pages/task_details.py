@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from orcha_ui.components.common import banner, detail_field, empty_state, overlay_panel, pre_block, section_card, tone_badge
+from orcha_ui.components.common import detail_field, empty_state, overlay_panel, pre_block, section_card, tone_badge
 from orcha_ui.components.layout import app_shell
 from orcha_ui.components.run_slices import timeline_strip
 from orcha_ui.state import TaskDetailState
@@ -26,7 +26,7 @@ def _schedule_card(card: dict) -> rx.Component:
                 width="100%",
             ),
             rx.text("Config", size="2", color="#64748b", text_transform="uppercase", letter_spacing="0.06em"),
-            pre_block(card["config_text"], min_height="8rem"),
+            pre_block(card["config_text"], min_height="4rem"),
             rx.text("Trigger Runs", size="2", color="#64748b", text_transform="uppercase", letter_spacing="0.06em"),
             rx.flex(
                 rx.foreach(card["trigger_runs"], lambda item: tone_badge(item, "slate")),
@@ -34,45 +34,40 @@ def _schedule_card(card: dict) -> rx.Component:
                 gap="0.5rem",
                 width="100%",
             ),
-            spacing="3",
+            spacing="2",
             align_items="stretch",
             width="100%",
         ),
-        padding="1rem",
-        border_radius="20px",
-        border="1px solid rgba(148, 163, 184, 0.18)",
+        padding="0.75rem",
+        border_radius="12px",
+        border="1px solid rgba(148, 163, 184, 0.22)",
         background_color="rgba(255,255,255,0.92)",
         width="100%",
     )
 
 
+def _history_header_cell(label: str) -> rx.Component:
+    # Sticky so the column headers stay visible while the history list scrolls.
+    return rx.table.column_header_cell(
+        label,
+        position="sticky",
+        top="0",
+        background_color="#f1f5f9",
+        z_index="1",
+    )
+
+
 def _history_row(row: dict) -> rx.Component:
-    return rx.link(
-        rx.box(
-            rx.flex(
-                rx.box(
-                    rx.text(row["run_id"], weight="medium", color="#0f172a"),
-                    rx.text(row["schedule"], size="2", color="#64748b"),
-                    min_width="12rem",
-                ),
-                tone_badge(row["status"], row["status_tone"]),
-                rx.box(rx.text(row["scheduled_time"], size="2", color="#475569"), min_width="12rem"),
-                rx.box(rx.text(row["start_time"], size="2", color="#475569"), min_width="12rem"),
-                rx.box(rx.text(row["end_time"], size="2", color="#475569"), min_width="12rem"),
-                wrap="wrap",
-                gap="1rem",
-                width="100%",
-                align="center",
-            ),
-            border="1px solid rgba(148, 163, 184, 0.18)",
-            border_radius="18px",
-            padding="0.9rem 1rem",
-            background_color="rgba(255,255,255,0.85)",
-            width="100%",
-        ),
-        href=row["href"],
-        text_decoration="none",
-        width="100%",
+    return rx.table.row(
+        rx.table.cell(rx.text(row["run_id"], weight="medium", color="#0f172a", size="1")),
+        rx.table.cell(rx.text(row["schedule"], size="1", color="#64748b")),
+        rx.table.cell(tone_badge(row["status"], row["status_tone"])),
+        rx.table.cell(rx.text(row["scheduled_time"], size="1", color="#475569")),
+        rx.table.cell(rx.text(row["start_time"], size="1", color="#475569")),
+        rx.table.cell(rx.text(row["end_time"], size="1", color="#475569")),
+        on_click=rx.redirect(row["href"]),
+        cursor="pointer",
+        _hover={"background_color": "rgba(148, 163, 184, 0.12)"},
     )
 
 
@@ -119,20 +114,6 @@ def task_details_page() -> rx.Component:
                 ),
             ),
             section_card(
-                rx.cond(
-                    TaskDetailState.task["schedule_cards"],
-                    rx.flex(
-                        rx.foreach(TaskDetailState.task["schedule_cards"], _schedule_card),
-                        wrap="wrap",
-                        gap="1rem",
-                        width="100%",
-                    ),
-                    empty_state("No Schedules", "This task only supports manual or trigger-based runs."),
-                ),
-                title="Schedules",
-                subtitle="Configured schedules and trigger dependencies for the selected task.",
-            ),
-            section_card(
                 rx.flex(
                     rx.box(
                         rx.text("Schedule", size="2", color="#64748b", text_transform="uppercase", letter_spacing="0.06em"),
@@ -165,12 +146,26 @@ def task_details_page() -> rx.Component:
                 rx.text_area(
                     value=TaskDetailState.manual_config_text,
                     on_change=TaskDetailState.set_manual_config_text,
-                    min_height="18rem",
+                    min_height="12rem",
                     resize="vertical",
                     width="100%",
                 ),
                 title="Manual Run",
                 subtitle="Review or override the schedule config before creating a manual run.",
+            ),
+            section_card(
+                rx.cond(
+                    TaskDetailState.task["schedule_cards"],
+                    rx.flex(
+                        rx.foreach(TaskDetailState.task["schedule_cards"], _schedule_card),
+                        wrap="wrap",
+                        gap="1rem",
+                        width="100%",
+                    ),
+                    empty_state("No Schedules", "This task only supports manual or trigger-based runs."),
+                ),
+                title="Schedules",
+                subtitle="Configured schedules and trigger dependencies for the selected task.",
             ),
             section_card(
                 timeline_strip(TaskDetailState.task["recent_runs_timeline"]),
@@ -179,11 +174,23 @@ def task_details_page() -> rx.Component:
             ),
             section_card(
                 rx.box(
-                    rx.vstack(
-                        rx.foreach(TaskDetailState.task["run_history_rows"], _history_row),
-                        spacing="3",
+                    rx.table.root(
+                        rx.table.header(
+                            rx.table.row(
+                                _history_header_cell("Run ID"),
+                                _history_header_cell("Schedule"),
+                                _history_header_cell("Status"),
+                                _history_header_cell("Scheduled"),
+                                _history_header_cell("Start"),
+                                _history_header_cell("End"),
+                            ),
+                        ),
+                        rx.table.body(
+                            rx.foreach(TaskDetailState.task["run_history_rows"], _history_row),
+                        ),
+                        variant="surface",
+                        size="1",
                         width="100%",
-                        align_items="stretch",
                     ),
                     max_height="34rem",
                     overflow="auto",
@@ -192,7 +199,7 @@ def task_details_page() -> rx.Component:
                 title="Run History",
                 subtitle="Recent run records with direct navigation into run details.",
             ),
-            spacing="5",
+            spacing="3",
             width="100%",
             align_items="stretch",
         ),
@@ -224,9 +231,8 @@ def task_details_page() -> rx.Component:
             on_cancel=TaskDetailState.close_delete_task,
         ),
         picker,
-        banner(TaskDetailState.status_message, TaskDetailState.status_tone),
         details,
-        spacing="5",
+        spacing="3",
         width="100%",
         align_items="stretch",
     )

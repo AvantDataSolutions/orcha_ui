@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from orcha_ui.components.common import banner, detail_field, empty_state, overlay_panel, pre_block, section_card, tone_badge
+from orcha_ui.components.common import detail_field, empty_state, overlay_panel, pre_block, section_card, tone_badge
 from orcha_ui.components.layout import app_shell
 from orcha_ui.state import RunDetailState
 
@@ -42,18 +42,6 @@ def run_details_page() -> rx.Component:
                 flex="1",
                 min_width="24rem",
             ),
-            rx.box(
-                rx.text("Actions", size="2", color="#64748b", text_transform="uppercase", letter_spacing="0.06em"),
-                rx.hstack(
-                    rx.button("Refresh", on_click=RunDetailState.refresh, color_scheme="cyan"),
-                    rx.cond(
-                        RunDetailState.run["can_cancel"],
-                        rx.button("Cancel Run", on_click=RunDetailState.ask_cancel_run, color_scheme="amber", variant="soft"),
-                        rx.fragment(),
-                    ),
-                    spacing="3",
-                ),
-            ),
             wrap="wrap",
             gap="1rem",
             width="100%",
@@ -65,57 +53,53 @@ def run_details_page() -> rx.Component:
     details = rx.cond(
         RunDetailState.has_run,
         rx.vstack(
-            section_card(
-                rx.flex(
-                    rx.box(
-                        rx.text("Task", size="2", color="#64748b", text_transform="uppercase", letter_spacing="0.06em"),
-                        rx.link(
-                            rx.heading(RunDetailState.run["task_name"], size="5", color="#0f172a"),
-                            href=RunDetailState.run["task_href"],
-                            text_decoration="none",
+            rx.box(
+                rx.box(
+                    section_card(
+                        rx.flex(
+                            rx.foreach(RunDetailState.run["fields"], _run_field),
+                            wrap="wrap",
+                            gap="1rem",
+                            width="100%",
                         ),
-                        rx.text(RunDetailState.run["task_description"], color="#475569", size="2"),
-                        flex="1",
-                        min_width="20rem",
+                        title=RunDetailState.run["task_name"],
+                        actions=rx.hstack(
+                            tone_badge(RunDetailState.run["task_status"], RunDetailState.run["task_status_tone"]),
+                            rx.link(
+                                rx.button("Open Task", color_scheme="cyan", size="2"),
+                                href=RunDetailState.run["task_href"],
+                                text_decoration="none",
+                            ),
+                            rx.cond(
+                                RunDetailState.run["triggered_run_href"] != "",
+                                rx.link(
+                                    rx.button("Open Triggered Run", variant="soft", color_scheme="gray", size="2"),
+                                    href=RunDetailState.run["triggered_run_href"],
+                                    text_decoration="none",
+                                ),
+                                rx.fragment(),
+                            ),
+                            spacing="2",
+                            align="center",
+                        ),
                     ),
-                    rx.box(
-                        rx.text("Task Status", size="2", color="#64748b", text_transform="uppercase", letter_spacing="0.06em"),
-                        tone_badge(RunDetailState.run["task_status"], RunDetailState.run["task_status_tone"]),
-                    ),
-                    wrap="wrap",
-                    gap="1rem",
+                    min_width="0",
                     width="100%",
                 ),
-                actions=rx.hstack(
-                    rx.link(rx.button("Open Task", color_scheme="cyan"), href=RunDetailState.run["task_href"], text_decoration="none"),
-                    rx.cond(
-                        RunDetailState.run["triggered_run_href"] != "",
-                        rx.link(
-                            rx.button("Open Triggered Run", variant="soft", color_scheme="gray"),
-                            href=RunDetailState.run["triggered_run_href"],
-                            text_decoration="none",
-                        ),
-                        rx.fragment(),
+                rx.box(
+                    section_card(
+                        pre_block(RunDetailState.run["config_text"], min_height="12rem"),
+                        title="Config",
+                        subtitle="Resolved config captured on the run record.",
                     ),
-                    spacing="3",
-                ),
-                title="Parent Task",
-                subtitle="Task context for the selected run.",
-            ),
-            section_card(
-                rx.flex(
-                    rx.foreach(RunDetailState.run["fields"], _run_field),
-                    wrap="wrap",
-                    gap="1rem",
+                    min_width="0",
                     width="100%",
                 ),
-                title="Run Metadata",
-                subtitle="Timing, status, and execution metadata for the selected run.",
-            ),
-            section_card(
-                pre_block(RunDetailState.run["config_text"], min_height="12rem"),
-                title="Config",
-                subtitle="Resolved config captured on the run record.",
+                display="grid",
+                grid_template_columns=rx.breakpoints(initial="minmax(0, 1fr)", xl="minmax(0, 2fr) minmax(0, 1fr)"),
+                gap="1rem",
+                width="100%",
+                align_items="start",
             ),
             section_card(
                 rx.hstack(
@@ -135,7 +119,7 @@ def run_details_page() -> rx.Component:
                 title="Output",
                 subtitle="Switch between the summarised output and the full run payload.",
             ),
-            spacing="5",
+            spacing="3",
             width="100%",
             align_items="stretch",
         ),
@@ -153,17 +137,32 @@ def run_details_page() -> rx.Component:
             on_cancel=RunDetailState.close_cancel_run,
         ),
         picker,
-        banner(RunDetailState.status_message, RunDetailState.status_tone),
         details,
-        spacing="5",
+        spacing="3",
         width="100%",
         align_items="stretch",
+    )
+    actions = rx.hstack(
+        rx.button("Refresh", on_click=RunDetailState.refresh, color_scheme="cyan", size="2"),
+        rx.cond(
+            RunDetailState.run["can_cancel"],
+            rx.button(
+                "Cancel Run",
+                on_click=RunDetailState.ask_cancel_run,
+                color_scheme="amber",
+                variant="soft",
+                size="2",
+            ),
+            rx.fragment(),
+        ),
+        spacing="2",
     )
     return app_shell(
         active_route="/run_details",
         page_title="Run Details",
         page_description="Inspect a single run, jump to its task, and review the resolved output payload.",
         content=content,
+        actions=actions,
     )
 
 

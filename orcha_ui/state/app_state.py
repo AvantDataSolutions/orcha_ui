@@ -19,6 +19,7 @@ from orcha_ui.services.types import (
     LogEntry,
     LogsQueryResult,
     OverviewQueryResult,
+    OverviewSummary,
     RunDetailPayload,
     RunDetailQueryResult,
     RunSliceData,
@@ -107,6 +108,11 @@ def _build_picker(
     return items, lookup, reverse_lookup, selected_label
 
 
+def _result_toast(ok: bool, message: str):
+    """Feedback that surfaces where the user is looking, regardless of scroll."""
+    return rx.toast.success(message) if ok else rx.toast.error(message)
+
+
 def _route_param(state: rx.State, name: str) -> str:
     try:
         params = getattr(getattr(state.router, "page", None), "params", {}) or {}
@@ -122,6 +128,7 @@ class OverviewState(rx.State):
     hours_text: str = "6"
     end_time_text: str = to_datetime_local(dt.now())
     show_disabled: bool = False
+    failures_only: bool = False
     last_refreshed: str = ""
     display_start_label: str = ""
     display_end_label: str = ""
@@ -131,6 +138,7 @@ class OverviewState(rx.State):
         "last_active": "Not Active",
         "last_active_tone": "red",
     }
+    overview_summary: OverviewSummary = {"failed": 0, "warn": 0, "running": 0, "success": 0}
     workspace_groups: list[WorkspaceGroup] = []
     tag_filters: list[ToggleFilter] = [{"label": "all", "active": True}]
     workspace_filters: list[ToggleFilter] = [{"label": "All Workspaces", "active": True}]
@@ -146,6 +154,7 @@ class OverviewState(rx.State):
         self.display_start_label = payload["display_start_label"]
         self.display_end_label = payload["display_end_label"]
         self.scheduler = payload["scheduler"]
+        self.overview_summary = payload["overview_summary"]
         self.workspace_groups = payload["workspace_groups"]
         self.selected_tags = payload["selected_tags"]
         self.selected_workspaces = payload["selected_workspaces"]
@@ -169,6 +178,7 @@ class OverviewState(rx.State):
             selected_tags=self.selected_tags,
             selected_workspaces=self.selected_workspaces,
             show_disabled=self.show_disabled,
+            failures_only=self.failures_only,
         )
         self._apply_payload(payload)
 
@@ -187,6 +197,11 @@ class OverviewState(rx.State):
     @rx.event
     def toggle_show_disabled(self, checked: bool) -> None:
         self.show_disabled = bool(checked)
+        self._load_payload()
+
+    @rx.event
+    def toggle_failures_only(self, checked: bool) -> None:
+        self.failures_only = bool(checked)
         self._load_payload()
 
     @rx.event
@@ -216,8 +231,9 @@ class OverviewState(rx.State):
         self._load_payload()
 
     @rx.event
-    def refresh(self) -> None:
+    def refresh(self):
         self._load_payload()
+        return rx.toast.info("Overview refreshed")
 
     @rx.event
     def set_now(self) -> None:
@@ -236,7 +252,7 @@ class TaskDetailState(rx.State):
     schedule_config_lookup: dict[str, str] = {}
     selected_schedule_label: str = ""
     manual_config_text: str = "{}"
-    status_message: str = "Ready."
+    status_message: str = ""
     status_tone: str = "blue"
     show_delete_modal: bool = False
     show_cancel_modal: bool = False
@@ -310,15 +326,13 @@ class TaskDetailState(rx.State):
         self.manual_config_text = value
 
     @rx.event
-    def toggle_task(self) -> None:
+    def toggle_task(self):
         task_id = str(self.task["task_id"])
         if not task_id:
-            self.status_message = "Task not found"
-            self.status_tone = "red"
-            return
-        self.status_message = queries.toggle_task_status(task_id)
-        self.status_tone = "green"
+            return rx.toast.error("Task not found")
+        message = queries.toggle_task_status(task_id)
         self._load_task(task_id)
+        return rx.toast.success(message)
 
     @rx.event
     def ask_cancel_unstarted(self) -> None:
@@ -329,21 +343,20 @@ class TaskDetailState(rx.State):
         self.show_cancel_modal = False
 
     @rx.event
-    def confirm_cancel_unstarted(self) -> None:
+    def confirm_cancel_unstarted(self):
         task_id = str(self.task["task_id"])
         self.show_cancel_modal = False
-        self.status_message = queries.cancel_unstarted_runs(task_id)
-        self.status_tone = "green"
+        message = queries.cancel_unstarted_runs(task_id)
         self._load_task(task_id)
+        return rx.toast.success(message)
 
     @rx.event
-    def create_manual_run(self) -> None:
+    def create_manual_run(self):
         task_id = str(self.task["task_id"])
         schedule_id = self.schedule_picker_lookup.get(self.selected_schedule_label, "")
         message, _run_id = queries.create_manual_run(task_id, schedule_id, self.manual_config_text)
-        self.status_message = message
-        self.status_tone = "green" if "created" in message.lower() else "red"
         self._load_task(task_id)
+        return _result_toast("created" in message.lower(), message)
 
     @rx.event
     def ask_delete_task(self) -> None:
@@ -354,16 +367,15 @@ class TaskDetailState(rx.State):
         self.show_delete_modal = False
 
     @rx.event
-    def confirm_delete_task(self) -> None:
+    def confirm_delete_task(self):
         task_id = str(self.task["task_id"])
         self.show_delete_modal = False
         deleted, message = queries.delete_task(task_id)
-        self.status_message = message
-        self.status_tone = "green" if deleted else "red"
         if deleted:
             self._apply_payload(queries.get_task_detail_payload(None))
-            return rx.redirect("/overview")
+            return [rx.toast.success(message), rx.redirect("/overview")]
         self._load_task(task_id)
+        return rx.toast.error(message)
 
 
 class RunDetailState(rx.State):
@@ -377,7 +389,7 @@ class RunDetailState(rx.State):
     run: RunDetailPayload = _empty_run_detail_payload()
     show_full_output: bool = False
     show_cancel_modal: bool = False
-    status_message: str = "Ready."
+    status_message: str = ""
     status_tone: str = "blue"
 
     @rx.var
@@ -442,9 +454,10 @@ class RunDetailState(rx.State):
         return rx.redirect("/run_details")
 
     @rx.event
-    def refresh(self) -> None:
+    def refresh(self):
         run_id = str(self.run["run_id"])
         self._load_run(run_id)
+        return rx.toast.info("Run refreshed")
 
     @rx.event
     def toggle_output_mode(self) -> None:
@@ -459,12 +472,12 @@ class RunDetailState(rx.State):
         self.show_cancel_modal = False
 
     @rx.event
-    def confirm_cancel_run(self) -> None:
+    def confirm_cancel_run(self):
         run_id = str(self.run["run_id"])
         self.show_cancel_modal = False
-        self.status_message = queries.cancel_run(run_id)
-        self.status_tone = "green"
+        message = queries.cancel_run(run_id)
         self._load_run(run_id)
+        return rx.toast.success(message)
 
 
 class LogsState(rx.State):
@@ -539,8 +552,9 @@ class LogsState(rx.State):
         self._load_payload()
 
     @rx.event
-    def refresh(self) -> None:
+    def refresh(self):
         self._load_payload()
+        return rx.toast.info("Logs refreshed")
 
     @rx.event
     def set_now(self) -> None:
@@ -561,7 +575,7 @@ class KvdbState(rx.State):
     expiry_minutes_text: str = "5"
     encryption_key: str = ""
     metadata: list[LabelValueItem] = [{"label": "Status", "value": "No entry selected."}]
-    status_message: str = "Ready."
+    status_message: str = ""
     status_tone: str = "blue"
 
     @rx.var
@@ -637,12 +651,13 @@ class KvdbState(rx.State):
         self.encryption_key = value
 
     @rx.event
-    def load_entry(self) -> None:
+    def load_entry(self):
         result = queries.load_kv_entry(self.key_input, self.encryption_key)
         self._apply_entry_result(result)
+        return _result_toast(result["ok"], result["status_message"])
 
     @rx.event
-    def save_entry(self) -> None:
+    def save_entry(self):
         result = queries.save_kv_entry(
             key=self.key_input,
             value_text=self.value_text,
@@ -652,14 +667,16 @@ class KvdbState(rx.State):
         )
         self._apply_entry_result(result)
         self.load()
+        return _result_toast(result["ok"], result["status_message"])
 
     @rx.event
-    def delete_entry(self) -> None:
+    def delete_entry(self):
         result = queries.delete_kv_entry(self.key_input)
         self._apply_entry_result(result)
         if result["ok"]:
             self.value_text = ""
         self.load()
+        return _result_toast(result["ok"], result["status_message"])
 
 
 class ThreadsState(rx.State):
@@ -691,8 +708,9 @@ class ThreadsState(rx.State):
         self._apply_payload(queries.get_threads_payload())
 
     @rx.event
-    def refresh(self) -> None:
+    def refresh(self):
         self._apply_payload(queries.get_threads_payload())
+        return rx.toast.info("Thread health refreshed")
 
 
 class LineageState(rx.State):

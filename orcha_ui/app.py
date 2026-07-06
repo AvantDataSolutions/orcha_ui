@@ -19,7 +19,10 @@ app = rx.App(
     ],
     style={
         "font_family": "'Work Sans', 'Segoe UI', sans-serif",
-        "background": "linear-gradient(180deg, #eff6ff 0%, #f8fafc 35%, #ffffff 100%)",
+        # Stay in a cool light-blue range (don't fade to white) so the white section
+        # cards have consistent contrast with the backdrop down the whole page.
+        "background": "linear-gradient(180deg, #e5ecf8 0%, #eaeff8 100%)",
+        "background_attachment": "fixed",
         "color": "#10223a",
     },
 )

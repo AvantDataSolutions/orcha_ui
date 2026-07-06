@@ -65,12 +65,17 @@ def timeline_strip(data: Any) -> rx.Component:
 def _render_segment(segment: Any) -> rx.Component:
     # Run segments always have both a tooltip and an href; gap segments have neither.
     # So checking tooltip presence is sufficient to distinguish them.
+    #
+    # The width/min-width MUST live on the flex item itself. For a run segment the
+    # flex item is the <a> the hover-card trigger renders via `as_child` — not the
+    # inner box. Sizing the nested box makes its width resolve against an auto-width
+    # parent and collapse to min-content, which is why the strips looked empty and
+    # the timeline runs sat in the wrong place. So the link carries the size and the
+    # box just fills it.
     run_box = rx.box(
-        width=segment["width"],
-        min_width=segment["min_width"],
+        width="100%",
         height="100%",
         background_color=segment["color"],
-        flex_shrink="0",
         border_right="1px solid rgba(255,255,255,0.32)",
         box_shadow="inset 0 1px 0 rgba(255,255,255,0.22)",
         cursor="pointer",
@@ -95,8 +100,10 @@ def _render_segment(segment: Any) -> rx.Component:
                     href=segment["href"],
                     text_decoration="none",
                     display="block",
-                    height="100%",
+                    width=segment["width"],
                     min_width=segment["min_width"],
+                    height="100%",
+                    flex_shrink="0",
                 ),
                 as_child=True,
                 height="100%",

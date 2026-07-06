@@ -60,6 +60,14 @@ class SchedulerSummary(TypedDict):
     last_active_tone: str
 
 
+class OverviewSummary(TypedDict):
+    """Health counts across the current lookback window (Overview header)."""
+    failed: int
+    warn: int
+    running: int
+    success: int
+
+
 class ScheduleOption(TypedDict):
     label: str
     value: str
@@ -92,6 +100,8 @@ class OverviewTaskCard(TypedDict):
     status_tone: str
     dimmed: bool
     highlight_error: bool
+    failure_count: int
+    running_count: int
     last_active: str
     last_active_tone: str
     last_run: str
@@ -225,6 +235,7 @@ class OverviewQueryResult(TypedDict):
     end_time_text: str
     last_refreshed: str
     scheduler: SchedulerSummary
+    overview_summary: OverviewSummary
     workspace_groups: list[WorkspaceGroup]
     available_tags: list[str]
     available_workspaces: list[str]

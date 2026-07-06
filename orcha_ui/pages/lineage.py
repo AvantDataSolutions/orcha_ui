@@ -29,18 +29,23 @@ def _node_kind_legend() -> rx.Component:
 def _task_legend_chip(item: dict) -> rx.Component:
     """A task-colour swatch that highlights its task path on hover and pins on click."""
     pinned = LineageState.pinned_task == item["task_id"]
-    return rx.hstack(
+    # Inline flex (not rx.hstack) so `align-items: center` is an inline style that
+    # can't be lost to a class-cascade conflict with the global Bootstrap stylesheet.
+    return rx.box(
         rx.box(
             width="14px",
             height="14px",
             background_color=item["color"],
             border_radius="4px",
             border="1px solid rgba(15,23,42,0.15)",
+            flex_shrink="0",
         ),
-        rx.text(item["label"], size="2"),
+        rx.text(item["label"], size="2", white_space="nowrap", line_height="1"),
         rx.cond(pinned, rx.icon("pin", size=12, color="#475569"), rx.fragment()),
-        spacing="2",
-        align="center",
+        display="flex",
+        flex_direction="row",
+        align_items="center",
+        gap="0.4rem",
         padding="0.2rem 0.55rem",
         border_radius="999px",
         cursor="pointer",
@@ -207,7 +212,7 @@ def lineage_page() -> rx.Component:
             title="Lineage Paths",
             subtitle="The same connections as a readable list. Shared sources and sinks are merged while task-specific intermediate modules remain distinct.",
         ),
-        spacing="5",
+        spacing="3",
         width="100%",
         align_items="stretch",
     )

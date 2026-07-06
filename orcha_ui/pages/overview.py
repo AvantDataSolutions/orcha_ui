@@ -17,7 +17,18 @@ def _control(label: str, component: rx.Component) -> rx.Component:
 
 
 def _scheduler_card() -> rx.Component:
+    summary = OverviewState.overview_summary
     return section_card(
+        rx.box(
+            metric("Failed", summary["failed"], rx.cond(summary["failed"] > 0, "alert", "slate")),
+            metric("Warn", summary["warn"], rx.cond(summary["warn"] > 0, "amber", "slate")),
+            metric("Running", summary["running"], rx.cond(summary["running"] > 0, "purple", "slate")),
+            metric("Succeeded", summary["success"], rx.cond(summary["success"] > 0, "green", "slate")),
+            display="grid",
+            grid_template_columns="repeat(auto-fit, minmax(6.5rem, 1fr))",
+            gap="0.65rem",
+            width="100%",
+        ),
         rx.box(
             metric("Started", OverviewState.scheduler["started"], OverviewState.scheduler["started_tone"]),
             metric("Last Active", OverviewState.scheduler["last_active"], OverviewState.scheduler["last_active_tone"]),
@@ -27,8 +38,8 @@ def _scheduler_card() -> rx.Component:
             gap="0.65rem",
             width="100%",
         ),
-        title="Scheduler",
-        subtitle="Heartbeat and freshness.",
+        title="Scheduler & Health",
+        subtitle="Run outcomes in window · scheduler heartbeat.",
     )
 
 
@@ -55,18 +66,19 @@ def _filters_card() -> rx.Component:
             ),
             _control(
                 "Flags",
-                rx.checkbox(
-                    "Show disabled tasks",
-                    checked=OverviewState.show_disabled,
-                    on_change=OverviewState.toggle_show_disabled,
-                ),
-            ),
-            _control(
-                "Actions",
-                rx.hstack(
-                    rx.button("Now", on_click=OverviewState.set_now, color_scheme="cyan", size="2"),
-                    rx.button("Refresh", on_click=OverviewState.refresh, variant="soft", color_scheme="gray", size="2"),
+                rx.vstack(
+                    rx.checkbox(
+                        "Failures only",
+                        checked=OverviewState.failures_only,
+                        on_change=OverviewState.toggle_failures_only,
+                    ),
+                    rx.checkbox(
+                        "Show disabled tasks",
+                        checked=OverviewState.show_disabled,
+                        on_change=OverviewState.toggle_show_disabled,
+                    ),
                     spacing="1",
+                    align_items="start",
                 ),
             ),
             display="grid",
@@ -128,6 +140,16 @@ def _task_strip(label: str, content: rx.Component) -> rx.Component:
     )
 
 
+def _status_badge(card: dict) -> rx.Component:
+    # "enabled" is the normal state and shouldn't compete for attention — render it
+    # as quiet muted text so only abnormal statuses (error/disabled/inactive) pop.
+    return rx.cond(
+        card["status"] == "enabled",
+        rx.text("enabled", size="1", color="#94a3b8"),
+        tone_badge(card["status"], card["status_tone"]),
+    )
+
+
 def _task_card(card: dict) -> rx.Component:
     return rx.box(
         rx.vstack(
@@ -138,9 +160,10 @@ def _task_card(card: dict) -> rx.Component:
                     text_decoration="none",
                 ),
                 rx.spacer(),
-                tone_badge(card["status"], card["status_tone"]),
+                _status_badge(card),
                 width="100%",
                 align="center",
+                spacing="2",
             ),
             rx.text(card["description"], color="#475569", size="2"),
             rx.box(
@@ -166,24 +189,30 @@ def _task_card(card: dict) -> rx.Component:
         ),
         width="100%",
         padding="0.75rem 0.85rem",
-        border_radius="18px",
-        border=rx.cond(card["highlight_error"], "1px solid rgba(220, 38, 38, 0.22)", "1px solid rgba(148, 163, 184, 0.18)"),
-        background_color=rx.cond(card["highlight_error"], "rgba(254, 242, 242, 0.7)", "rgba(255, 255, 255, 0.92)"),
+        border_radius="14px",
+        border=rx.cond(card["highlight_error"], "1px solid rgba(220, 38, 38, 0.55)", "1px solid rgba(148, 163, 184, 0.28)"),
+        border_left=rx.cond(card["highlight_error"], "4px solid #dc2626", "4px solid transparent"),
+        background_color=rx.cond(card["highlight_error"], "rgba(254, 226, 226, 0.85)", "#ffffff"),
+        box_shadow="0 2px 8px rgba(15, 23, 42, 0.08)",
         opacity=rx.cond(card["dimmed"], "0.68", "1"),
     )
 
 
 def _workspace_group(group: dict) -> rx.Component:
-    return section_card(
+    # No white panel wrapper here — task cards are white and sit directly on the
+    # blue page background so each card reads as a distinct, elevated card.
+    return rx.vstack(
+        rx.heading(group["workspace"], size="4", color="#0f172a"),
         rx.box(
             rx.foreach(group["task_cards"], _task_card),
             display="grid",
-            grid_template_columns="repeat(auto-fit, minmax(21.5rem, 1fr))",
+            grid_template_columns="repeat(auto-fill, minmax(21.5rem, 1fr))",
             gap="0.9rem",
             width="100%",
         ),
-        title=group["workspace"],
-        subtitle="Tasks grouped by workspace.",
+        spacing="2",
+        width="100%",
+        align_items="stretch",
     )
 
 
@@ -201,21 +230,27 @@ def overview_page() -> rx.Component:
             OverviewState.has_workspace_groups,
             rx.vstack(
                 rx.foreach(OverviewState.workspace_groups, _workspace_group),
-                spacing="4",
+                spacing="3",
                 width="100%",
                 align_items="stretch",
             ),
             empty_state("No Tasks Found", "No tasks matched the current overview filters."),
         ),
-        spacing="4",
+        spacing="3",
         width="100%",
         align_items="stretch",
+    )
+    actions = rx.hstack(
+        rx.button("Now", on_click=OverviewState.set_now, color_scheme="cyan", size="2"),
+        rx.button("Refresh", on_click=OverviewState.refresh, variant="soft", color_scheme="gray", size="2"),
+        spacing="2",
     )
     return app_shell(
         active_route="/overview",
         page_title="Overview",
         page_description="Operational snapshot of scheduler health, task activity, and recent run timelines.",
         content=content,
+        actions=actions,
     )
 
 

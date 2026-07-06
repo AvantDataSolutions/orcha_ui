@@ -21,9 +21,6 @@ def _summary_card() -> rx.Component:
         ),
         title="Thread Health",
         subtitle="Supervised background threads across all orcha processes.",
-        actions=rx.button(
-            "Refresh", on_click=ThreadsState.refresh, variant="soft", color_scheme="gray", size="2"
-        ),
     )
 
 
@@ -83,7 +80,7 @@ def threads_page() -> rx.Component:
             ThreadsState.has_instances,
             rx.vstack(
                 rx.foreach(ThreadsState.instances, _instance_group),
-                spacing="4",
+                spacing="3",
                 width="100%",
                 align_items="stretch",
             ),
@@ -93,15 +90,19 @@ def threads_page() -> rx.Component:
                 "task runner publish health once they start.",
             ),
         ),
-        spacing="4",
+        spacing="3",
         width="100%",
         align_items="stretch",
+    )
+    actions = rx.button(
+        "Refresh", on_click=ThreadsState.refresh, variant="soft", color_scheme="gray", size="2"
     )
     return app_shell(
         active_route="/threads",
         page_title="Threads",
         page_description="Lifecycle and health of supervised background threads.",
         content=content,
+        actions=actions,
     )
 
 

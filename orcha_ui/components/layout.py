@@ -5,23 +5,35 @@ import reflex as rx
 from orcha_ui.constants import APP_VERSION, APP_VERSION_TONE, NAV_ITEMS, USER_LABEL
 
 
-def app_shell(*, active_route: str, page_title: str, page_description: str, content: rx.Component) -> rx.Component:
+def app_shell(
+    *,
+    active_route: str,
+    page_title: str,
+    page_description: str,
+    content: rx.Component,
+    actions: rx.Component | None = None,
+) -> rx.Component:
     return rx.box(
         rx.hstack(
             _sidebar(active_route),
             rx.box(
                 rx.vstack(
-                    rx.vstack(
-                        rx.heading(page_title, size="6", color="#0f172a", weight="bold"),
-                        rx.text(page_description, color="#64748b", size="2"),
-                        spacing="1",
-                        padding_bottom="0.85rem",
-                        border_bottom="1px solid rgba(148,163,184,0.2)",
+                    rx.hstack(
+                        rx.vstack(
+                            rx.heading(page_title, size="6", color="#0f172a", weight="bold"),
+                            rx.text(page_description, color="#64748b", size="2"),
+                            spacing="1",
+                            align_items="start",
+                        ),
+                        rx.spacer(),
+                        actions if actions is not None else rx.fragment(),
                         width="100%",
-                        align_items="start",
+                        align="center",
+                        padding_bottom="0.6rem",
+                        border_bottom="1px solid rgba(148,163,184,0.2)",
                     ),
                     content,
-                    spacing="4",
+                    spacing="3",
                     align_items="stretch",
                     width="100%",
                 ),
@@ -79,8 +91,8 @@ def _sidebar(active_route: str) -> rx.Component:
             align_items="stretch",
             width="100%",
         ),
-        width="248px",
-        min_width="248px",
+        width="220px",
+        min_width="220px",
         min_height="100vh",
         padding="1rem 0.8rem",
         border_right="1px solid rgba(148,163,184,0.16)",
@@ -94,19 +106,15 @@ def _nav_item(item: dict[str, str], active_route: str) -> rx.Component:
     is_active = active_route == item["route"]
     return rx.link(
         rx.hstack(
-            rx.image(src=item["image"], width="1.5rem", height="1.5rem", border_radius="8px"),
-            rx.vstack(
-                rx.text(item["name"], color="#0f172a", weight="medium", size="2"),
-                rx.text(item["description"], color="#64748b", size="1"),
-                spacing="0",
-                align_items="start",
-            ),
+            rx.image(src=item["image"], width="1.4rem", height="1.4rem", border_radius="8px"),
+            rx.text(item["name"], color="#0f172a", weight="medium", size="2"),
             spacing="2",
             width="100%",
             align="center",
         ),
         href=item["route"],
         text_decoration="none",
+        custom_attrs={"title": item["description"]},
         background_color="#e0f2fe" if is_active else "transparent",
         border="1px solid rgba(14,165,233,0.24)" if is_active else "1px solid transparent",
         border_left="3px solid #0284c7" if is_active else "3px solid transparent",

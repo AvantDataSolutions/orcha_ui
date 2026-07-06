@@ -107,6 +107,7 @@ def get_overview_payload(
     selected_tags: list[str] | None = None,
     selected_workspaces: list[str] | None = None,
     show_disabled: bool = False,
+    failures_only: bool = False,
 ) -> OverviewQueryResult:
     display_end_time = parse_local_dt(end_time_text, dt.now())
     display_start_time = display_end_time - td(hours=max(hours, 1))
@@ -146,12 +147,21 @@ def get_overview_payload(
         ]
 
     task_runs: dict[str, list[tasks.RunItem]] = {}
+    overview_summary = {"failed": 0, "warn": 0, "running": 0, "success": 0}
     for task in filtered_tasks:
-        task_runs[str(task.task_idk)] = tasks.RunItem.get_all(
+        runs = tasks.RunItem.get_all(
             task=task,
             schedule=None,
             since=dt.now() - td(days=10),
         )
+        task_runs[str(task.task_idk)] = runs
+        # Health counts across the lookback window, aggregated over all visible tasks.
+        for run in runs:
+            marker = run.start_time or run.scheduled_time
+            if marker is None or not (display_start_time <= marker <= display_end_time):
+                continue
+            if run.status in overview_summary:
+                overview_summary[run.status] += 1
 
     scheduler_summary = _build_scheduler_summary()
     workspace_groups: list[dict[str, Any]] = []
@@ -171,6 +181,11 @@ def get_overview_payload(
             )
             for task in workspace_tasks
         ]
+        overview_summary["running"] += sum(card["running_count"] for card in task_cards)
+        if failures_only:
+            task_cards = [card for card in task_cards if card["highlight_error"]]
+        if not task_cards:
+            continue
         workspace_groups.append(
             {
                 "workspace": workspace,
@@ -183,6 +198,7 @@ def get_overview_payload(
         "end_time_text": display_end_time.strftime("%Y-%m-%dT%H:%M"),
         "last_refreshed": seconds_only(dt.now()),
         "scheduler": scheduler_summary,
+        "overview_summary": overview_summary,
         "workspace_groups": workspace_groups,
         "available_tags": all_tags,
         "available_workspaces": all_workspaces,
@@ -1209,12 +1225,16 @@ def build_lineage_flow(model: dict[str, Any]) -> tuple[list[dict[str, Any]], lis
 
 
 def build_compact_run_slices(task_runs: list[tasks.RunItem]) -> dict[str, Any]:
+    # Equal-width chips that fill the whole strip, so a short run of runs reads as a
+    # full status bar rather than a few chips stranded in an empty track.
+    count = len(task_runs)
+    width = f"{100 / count:.4f}%" if count else "0%"
     segments = [
         {
             "kind": "run",
             "href": f"/run_details/{run.run_idk}",
-            "width": "14px",
-            "min_width": "14px",
+            "width": width,
+            "min_width": "6px",
             "height": "18px",
             "color": run_status_color(run.status, run.progress),
             "tooltip": _run_tooltip(run),
@@ -1248,16 +1268,19 @@ def build_run_timeline_data(
     segments: list[dict[str, Any]] = []
     previous_end = display_start_time
 
-    for index, run in enumerate(filtered_runs):
-        if run.scheduled_time > previous_end:
-            segments.append(_blank_segment(previous_end, run.scheduled_time, display_hours))
-
+    for run in filtered_runs:
+        start_time, end_time = _run_bounds(run)
+        # Idle gap before the run so it lands at its real position on the window;
+        # the run's own width is its duration.
+        if start_time > previous_end:
+            segments.append(_blank_segment(previous_end, start_time, display_hours))
         segments.append(_run_segment(run, display_hours))
+        previous_end = max(previous_end, end_time)
 
-        next_run = filtered_runs[index + 1] if index < len(filtered_runs) - 1 else None
-        previous_end = next_run.scheduled_time if next_run is not None else display_end_time
-        if next_run is None and run.scheduled_time < display_end_time:
-            segments.append(_blank_segment(run.scheduled_time, display_end_time, display_hours))
+    # Trailing idle fills to the end of the window; a run that finished ~now therefore
+    # sits at the right edge instead of being stretched across the remaining space.
+    if previous_end < display_end_time:
+        segments.append(_blank_segment(previous_end, display_end_time, display_hours))
 
     return {
         "has_segments": bool(filtered_runs),
@@ -1392,8 +1415,14 @@ def _build_overview_task_card(
     display_end_time: dt,
 ) -> dict[str, Any]:
     all_runs = sorted(all_runs, key=lambda run: run.scheduled_time)
-    recent_runs = all_runs[-5:]
+    recent_runs = all_runs[-10:]
     active_runs = task.get_running_runs()
+
+    # Failure signal drives the card highlight. Base it on the runs actually shown
+    # in the "Recent Runs" strip so the red accent matches what the operator sees.
+    # (Timeouts surface as `failed`; `warn` is a softer degraded state.)
+    failure_count = sum(1 for run in recent_runs if run.status == tasks.RunStatusEnum.failed.value)
+    has_recent_failure = failure_count > 0 or task.status == "error"
 
     next_scheduled = task.get_next_scheduled_time()
     next_scheduled_text = seconds_only(next_scheduled)
@@ -1416,7 +1445,9 @@ def _build_overview_task_card(
         "status": task.status,
         "status_tone": _tone_for_task_status(task.status),
         "dimmed": task.status not in {"enabled", "error"},
-        "highlight_error": task.status == "error",
+        "highlight_error": has_recent_failure,
+        "failure_count": failure_count,
+        "running_count": len(active_runs),
         "last_active": last_active_delta,
         "last_active_tone": last_active_tone,
         "last_run": format_dt(recent_runs[-1].scheduled_time) if recent_runs else "N/A",
@@ -1446,12 +1477,9 @@ def _blank_segment(start_time: dt, end_time: dt, display_hours: float) -> dict[s
     }
 
 
-def _run_segment(run: tasks.RunItem, display_hours: float) -> dict[str, Any]:
-    if run.start_time is not None:
-        start_time = run.start_time
-    else:
-        start_time = run.scheduled_time
-
+def _run_bounds(run: tasks.RunItem) -> tuple[dt, dt]:
+    """Effective [start, end] used to both size and position a run on the timeline."""
+    start_time = run.start_time if run.start_time is not None else run.scheduled_time
     if run.end_time is not None:
         end_time = run.end_time
     elif run.status in {
@@ -1462,7 +1490,11 @@ def _run_segment(run: tasks.RunItem, display_hours: float) -> dict[str, Any]:
         end_time = run.last_active or start_time
     else:
         end_time = start_time
+    return start_time, end_time
 
+
+def _run_segment(run: tasks.RunItem, display_hours: float) -> dict[str, Any]:
+    start_time, end_time = _run_bounds(run)
     duration_hours = max((end_time - start_time).total_seconds() / 3600, 0)
     width = max((duration_hours / display_hours) * 100, 0.5)
     return {
@@ -1508,7 +1540,7 @@ def _tone_for_task_status(status: str | None) -> str:
     if value == "enabled":
         return "green"
     if value == "error":
-        return "red"
+        return "alert"  # emphasized (solid) red so a broken task stands out
     if value in {"inactive", "disabled", "deleted"}:
         return "slate"
     return "blue"
@@ -1518,10 +1550,12 @@ def _tone_for_run_status(status: str | None) -> str:
     value = (status or "").lower()
     if value == "success":
         return "green"
-    if value in {"failed", "cancelled"}:
-        return "red"
+    if value == "failed":
+        return "alert"  # emphasized (solid) red — the signal operators hunt for
     if value in {"warn", "warning"}:
         return "amber"
+    if value == "cancelled":
+        return "slate"  # neutral, not a failure — keep it quiet
     return "blue"
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from orcha_ui.components.common import banner, empty_state, metric, section_card, tone_badge
+from orcha_ui.components.common import empty_state, metric, section_card, tone_badge
 from orcha_ui.components.layout import app_shell
 from orcha_ui.state import KvdbState
 
@@ -48,7 +48,6 @@ def _metadata_metric(item: dict) -> rx.Component:
 def kvdb_page() -> rx.Component:
     content = rx.vstack(
         section_card(
-            banner(KvdbState.status_message, KvdbState.status_tone),
             rx.flex(
                 rx.box(
                     rx.text("Search", size="2", color="#64748b", text_transform="uppercase", letter_spacing="0.06em"),
@@ -63,10 +62,6 @@ def kvdb_page() -> rx.Component:
                 rx.box(
                     rx.text("Flags", size="2", color="#64748b", text_transform="uppercase", letter_spacing="0.06em"),
                     rx.checkbox("Include expired", checked=KvdbState.include_expired, on_change=KvdbState.toggle_include_expired),
-                ),
-                rx.box(
-                    rx.text("Actions", size="2", color="#64748b", text_transform="uppercase", letter_spacing="0.06em"),
-                    rx.button("Refresh Listing", on_click=KvdbState.load, color_scheme="cyan"),
                 ),
                 wrap="wrap",
                 gap="1rem",
@@ -151,15 +146,17 @@ def kvdb_page() -> rx.Component:
             width="100%",
             align="start",
         ),
-        spacing="5",
+        spacing="3",
         width="100%",
         align_items="stretch",
     )
+    actions = rx.button("Refresh Listing", on_click=KvdbState.load, color_scheme="cyan", size="2")
     return app_shell(
         active_route="/kvdb",
         page_title="KVDB Explorer",
         page_description="Inspect persisted KVDB records, preview values, and manage key-level metadata.",
         content=content,
+        actions=actions,
     )
 
 
