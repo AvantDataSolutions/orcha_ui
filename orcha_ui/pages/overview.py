@@ -190,11 +190,23 @@ def _task_card(card: dict) -> rx.Component:
         width="100%",
         padding="0.75rem 0.85rem",
         border_radius="14px",
-        border=rx.cond(card["highlight_error"], "1px solid rgba(220, 38, 38, 0.55)", "1px solid rgba(148, 163, 184, 0.28)"),
-        border_left=rx.cond(card["highlight_error"], "4px solid #dc2626", "4px solid transparent"),
-        background_color=rx.cond(card["highlight_error"], "rgba(254, 226, 226, 0.85)", "#ffffff"),
+        border=rx.cond(
+            card["highlight_error"],
+            "1px solid rgba(220, 38, 38, 0.55)",
+            rx.cond(card["highlight_disabled"], "1px solid rgba(100, 116, 139, 0.55)", "1px solid rgba(148, 163, 184, 0.28)"),
+        ),
+        border_left=rx.cond(
+            card["highlight_error"],
+            "4px solid #dc2626",
+            rx.cond(card["highlight_disabled"], "4px solid #475569", "4px solid transparent"),
+        ),
+        background_color=rx.cond(
+            card["highlight_error"],
+            "rgba(254, 226, 226, 0.85)",
+            rx.cond(card["highlight_disabled"], "rgba(241, 245, 249, 0.9)", "#ffffff"),
+        ),
         box_shadow="0 2px 8px rgba(15, 23, 42, 0.08)",
-        opacity=rx.cond(card["dimmed"], "0.68", "1"),
+        opacity=rx.cond(card["highlight_disabled"], "0.75", "1"),
     )
 
 
@@ -227,14 +239,23 @@ def overview_page() -> rx.Component:
             align="stretch",
         ),
         rx.cond(
-            OverviewState.has_workspace_groups,
-            rx.vstack(
-                rx.foreach(OverviewState.workspace_groups, _workspace_group),
-                spacing="3",
+            OverviewState.is_loading,
+            rx.center(
+                rx.spinner(size="3"),
                 width="100%",
-                align_items="stretch",
+                min_height="8rem",
+                padding="2rem",
             ),
-            empty_state("No Tasks Found", "No tasks matched the current overview filters."),
+            rx.cond(
+                OverviewState.has_workspace_groups,
+                rx.vstack(
+                    rx.foreach(OverviewState.workspace_groups, _workspace_group),
+                    spacing="3",
+                    width="100%",
+                    align_items="stretch",
+                ),
+                empty_state("No Tasks Found", "No tasks matched the current overview filters."),
+            ),
         ),
         spacing="3",
         width="100%",

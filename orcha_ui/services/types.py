@@ -98,8 +98,8 @@ class OverviewTaskCard(TypedDict):
     description: str
     status: str
     status_tone: str
-    dimmed: bool
     highlight_error: bool
+    highlight_disabled: bool
     failure_count: int
     running_count: int
     last_active: str

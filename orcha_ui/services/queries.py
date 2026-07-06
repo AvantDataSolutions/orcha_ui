@@ -1442,11 +1442,15 @@ def _build_overview_task_card(
     recent_runs = all_runs[-10:]
     active_runs = task.get_running_runs()
 
-    # Failure signal drives the card highlight. Base it on the runs actually shown
-    # in the "Recent Runs" strip so the red accent matches what the operator sees.
+    # Card highlight rules:
+    #   red   -> task is in "error" status OR the most recent run failed
+    #   grey  -> task is disabled (dimmed at 75% opacity)
+    #   none  -> everything else
     # (Timeouts surface as `failed`; `warn` is a softer degraded state.)
     failure_count = sum(1 for run in recent_runs if run.status == tasks.RunStatusEnum.failed.value)
-    has_recent_failure = failure_count > 0 or task.status == "error"
+    last_run_failed = bool(recent_runs) and recent_runs[-1].status == tasks.RunStatusEnum.failed.value
+    highlight_error = last_run_failed or task.status == "error"
+    highlight_disabled = task.status == "disabled" and not highlight_error
 
     next_scheduled = task.get_next_scheduled_time()
     next_scheduled_text = seconds_only(next_scheduled)
@@ -1468,8 +1472,8 @@ def _build_overview_task_card(
         "description": task.description or "No description provided.",
         "status": task.status,
         "status_tone": _tone_for_task_status(task.status),
-        "dimmed": task.status not in {"enabled", "error"},
-        "highlight_error": has_recent_failure,
+        "highlight_error": highlight_error,
+        "highlight_disabled": highlight_disabled,
         "failure_count": failure_count,
         "running_count": len(active_runs),
         "last_active": last_active_delta,

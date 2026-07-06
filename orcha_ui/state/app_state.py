@@ -138,6 +138,7 @@ class OverviewState(rx.State):
     }
     overview_summary: OverviewSummary = {"failed": 0, "warn": 0, "running": 0, "success": 0}
     workspace_groups: list[WorkspaceGroup] = []
+    is_loading: bool = True
     tag_filters: list[ToggleFilter] = [{"label": "all", "active": True}]
     workspace_filters: list[ToggleFilter] = [{"label": "All Workspaces", "active": True}]
     selected_tags: list[str] = ["all"]
@@ -180,9 +181,19 @@ class OverviewState(rx.State):
         )
         self._apply_payload(payload)
 
+    def _reload(self):
+        # Flush `is_loading` to the client (yield) so the spinner renders before the
+        # blocking query runs, then clear it once the fresh payload is applied.
+        self.is_loading = True
+        yield
+        try:
+            self._load_payload()
+        finally:
+            self.is_loading = False
+
     @rx.event
-    def load(self) -> None:
-        self._load_payload()
+    def load(self):
+        yield from self._reload()
 
     @rx.event
     def set_hours_text(self, value: str) -> None:
@@ -193,14 +204,14 @@ class OverviewState(rx.State):
         self.end_time_text = value
 
     @rx.event
-    def toggle_show_disabled(self, checked: bool) -> None:
+    def toggle_show_disabled(self, checked: bool):
         self.show_disabled = bool(checked)
-        self._load_payload()
+        yield from self._reload()
 
     @rx.event
-    def toggle_failures_only(self, checked: bool) -> None:
+    def toggle_failures_only(self, checked: bool):
         self.failures_only = bool(checked)
-        self._load_payload()
+        yield from self._reload()
 
     @rx.event
     def toggle_tag(self, tag: str) -> None:
@@ -213,10 +224,10 @@ class OverviewState(rx.State):
             else:
                 current.add(tag)
             self.selected_tags = sorted(current) if current else ["all"]
-        self._load_payload()
+        yield from self._reload()
 
     @rx.event
-    def toggle_workspace(self, workspace: str) -> None:
+    def toggle_workspace(self, workspace: str):
         if workspace == "All Workspaces":
             self.selected_workspaces = ["All Workspaces"]
         else:
@@ -226,17 +237,17 @@ class OverviewState(rx.State):
             else:
                 current.add(workspace)
             self.selected_workspaces = sorted(current) if current else ["All Workspaces"]
-        self._load_payload()
+        yield from self._reload()
 
     @rx.event
     def refresh(self):
-        self._load_payload()
-        return rx.toast.info("Overview refreshed")
+        yield from self._reload()
+        yield rx.toast.info("Overview refreshed")
 
     @rx.event
-    def set_now(self) -> None:
+    def set_now(self):
         self.end_time_text = to_datetime_local(dt.now())
-        self._load_payload()
+        yield from self._reload()
 
 
 class TaskDetailState(rx.State):
