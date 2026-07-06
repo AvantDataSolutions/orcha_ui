@@ -23,15 +23,30 @@ from orcha_ui.services.formatting import (
     trim_text,
 )
 from orcha_ui.services.types import (
+    DetailField,
+    KvEntry,
     KvEntryResult,
     KvListingResult,
     LabelValueItem,
+    LineageLegendItem,
+    LineageLinkRow,
     LineageQueryResult,
+    LogEntry,
     LogsQueryResult,
     OverviewQueryResult,
+    OverviewTaskCard,
     RunDetailQueryResult,
+    RunHistoryRow,
+    RunSliceData,
+    RunSliceSegment,
+    ScheduleCard,
+    ScheduleOption,
+    SchedulerSummary,
     TaskDetailQueryResult,
+    ThreadInstanceGroup,
+    ThreadRow,
     ThreadsQueryResult,
+    WorkspaceGroup,
 )
 
 # An instance whose health snapshot hasn't been updated within this window is
@@ -164,7 +179,7 @@ def get_overview_payload(
                 overview_summary[run.status] += 1
 
     scheduler_summary = _build_scheduler_summary()
-    workspace_groups: list[dict[str, Any]] = []
+    workspace_groups: list[WorkspaceGroup] = []
     grouped_tasks: dict[str, list[tasks.TaskItem]] = {}
     for task in filtered_tasks:
         grouped_tasks.setdefault(_task_workspace(task), []).append(task)
@@ -198,7 +213,12 @@ def get_overview_payload(
         "end_time_text": display_end_time.strftime("%Y-%m-%dT%H:%M"),
         "last_refreshed": seconds_only(dt.now()),
         "scheduler": scheduler_summary,
-        "overview_summary": overview_summary,
+        "overview_summary": {
+            "failed": overview_summary["failed"],
+            "warn": overview_summary["warn"],
+            "running": overview_summary["running"],
+            "success": overview_summary["success"],
+        },
         "workspace_groups": workspace_groups,
         "available_tags": all_tags,
         "available_workspaces": all_workspaces,
@@ -237,8 +257,8 @@ def get_task_detail_payload(task_id: str | None) -> TaskDetailQueryResult:
     all_runs.sort(key=lambda run: run.scheduled_time)
     all_runs = all_runs[-200:]
 
-    schedule_options = []
-    schedule_cards = []
+    schedule_options: list[ScheduleOption] = []
+    schedule_cards: list[ScheduleCard] = []
     default_manual_config = safe_json({"notes": "manually created run"})
     for schedule in task.schedule_sets:
         config_with_defaults = dict(task.task_config)
@@ -251,7 +271,7 @@ def get_task_detail_payload(task_id: str | None) -> TaskDetailQueryResult:
                 "config_text": safe_json(config_with_defaults, indent=4),
             }
         )
-        trigger_runs = []
+        trigger_runs: list[str] = []
         if schedule.trigger_config:
             trigger_runs.append(str(schedule.trigger_config.task.task_idk))
         else:
@@ -267,7 +287,7 @@ def get_task_detail_payload(task_id: str | None) -> TaskDetailQueryResult:
     if not schedule_options:
         schedule_options = [{"label": "No schedules", "value": "", "config_text": default_manual_config}]
 
-    fields = [
+    fields: list[DetailField] = [
         {"label": "Task ID", "value": str(task.task_idk), "tone": "slate", "code": False},
         {"label": "Name", "value": task.name, "tone": "slate", "code": False},
         {"label": "Description", "value": task.description or "N/A", "tone": "slate", "code": False},
@@ -278,7 +298,7 @@ def get_task_detail_payload(task_id: str | None) -> TaskDetailQueryResult:
         {"label": "Metadata", "value": safe_json(task.task_metadata, indent=4), "tone": "slate", "code": True},
     ]
 
-    run_history_rows = [
+    run_history_rows: list[RunHistoryRow] = [
         {
             "run_id": str(run.run_idk),
             "schedule": _run_schedule_text(task, run),
@@ -450,7 +470,7 @@ def get_run_detail_payload(run_id: str | None) -> RunDetailQueryResult:
     summarised = summarise_run_output(run.output) if run.output else {}
     summarised_output = safe_json(summarised, indent=4, default="No output") if summarised else "No output"
 
-    fields = [
+    fields: list[DetailField] = [
         {"label": "Run ID", "value": str(run.run_idk), "tone": "slate", "code": False},
         {"label": "Scheduled Time", "value": format_dt(run.scheduled_time), "tone": "slate", "code": False},
         {"label": "Created By", "value": f"{run.created_by} ({format_dt(run.created_time)})", "tone": "slate", "code": False},
@@ -677,7 +697,7 @@ def delete_kv_entry(key: str | None) -> KvEntryResult:
 def get_lineage_payload(selected_task_ids: list[str] | None = None) -> LineageQueryResult:
     all_tasks = tasks.TaskItem.get_all()
     all_tasks.sort(key=lambda task: (_task_workspace(task), task.name, str(task.task_idk)))
-    task_options = [
+    task_options: list[LabelValueItem] = [
         {
             "label": f"{task.name} ({task.task_idk})",
             "value": str(task.task_idk),
@@ -690,7 +710,7 @@ def get_lineage_payload(selected_task_ids: list[str] | None = None) -> LineageQu
     selected_values = [str(task.task_idk) for task in all_tasks] if selected_task_ids is None else list(selected_task_ids)
     selected_set = set(selected_values) if selected_task_ids is not None else None
     model = build_lineage_model(selected_set)
-    legend = [
+    legend: list[LineageLegendItem] = [
         {
             "task_id": task_id,
             "label": model.get("task_labels", {}).get(task_id, task_id),
@@ -704,7 +724,7 @@ def get_lineage_payload(selected_task_ids: list[str] | None = None) -> LineageQu
     }
     color_lookup = {item["task_id"]: item["color"] for item in legend}
     task_label_lookup = {item["task_id"]: item["label"] for item in legend}
-    link_rows = sorted(
+    link_rows: list[LineageLinkRow] = sorted(
         [
             {
                 "task_id": str(link["task"]),
@@ -1224,12 +1244,12 @@ def build_lineage_flow(model: dict[str, Any]) -> tuple[list[dict[str, Any]], lis
     return flow_nodes, flow_edges
 
 
-def build_compact_run_slices(task_runs: list[tasks.RunItem]) -> dict[str, Any]:
+def build_compact_run_slices(task_runs: list[tasks.RunItem]) -> RunSliceData:
     # Equal-width chips that fill the whole strip, so a short run of runs reads as a
     # full status bar rather than a few chips stranded in an empty track.
     count = len(task_runs)
     width = f"{100 / count:.4f}%" if count else "0%"
-    segments = [
+    segments: list[RunSliceSegment] = [
         {
             "kind": "run",
             "href": f"/run_details/{run.run_idk}",
@@ -1241,10 +1261,14 @@ def build_compact_run_slices(task_runs: list[tasks.RunItem]) -> dict[str, Any]:
         }
         for run in task_runs
     ]
+    # Compact strips don't render start/end labels, but RunSliceData carries them so
+    # every slice payload has a uniform shape for the Reflex state var.
     return {
         "has_segments": bool(segments),
         "segments": segments,
         "empty_text": "No recent runs to display",
+        "start_label": "",
+        "end_label": "",
     }
 
 
@@ -1254,7 +1278,7 @@ def build_run_timeline_data(
     display_start_time: dt,
     display_end_time: dt,
     display_count: int | None = None,
-) -> dict[str, Any]:
+) -> RunSliceData:
     display_hours = max((display_end_time - display_start_time).total_seconds() / 3600, 1 / 60)
     filtered_runs = sorted(all_runs, key=lambda run: run.scheduled_time)
     filtered_runs = [
@@ -1265,7 +1289,7 @@ def build_run_timeline_data(
     if display_count:
         filtered_runs = filtered_runs[-display_count:]
 
-    segments: list[dict[str, Any]] = []
+    segments: list[RunSliceSegment] = []
     previous_end = display_start_time
 
     for run in filtered_runs:
@@ -1304,7 +1328,7 @@ def get_threads_payload() -> ThreadsQueryResult:
     for row in snapshot:
         grouped[str(row.get("instance_id") or "unknown")].append(row)
 
-    instances: list[dict[str, Any]] = []
+    instances: list[ThreadInstanceGroup] = []
     total_threads = 0
     unhealthy_threads = 0
     for instance_id in sorted(grouped):
@@ -1356,7 +1380,7 @@ def get_threads_payload() -> ThreadsQueryResult:
     }
 
 
-def _build_thread_row(row: dict[str, Any], *, online: bool) -> dict[str, Any]:
+def _build_thread_row(row: dict[str, Any], *, online: bool) -> ThreadRow:
     state = str(row.get("state") or "unknown")
     # A thread on an offline instance is only as trustworthy as its last report,
     # so visually de-emphasise its (now stale) state.
@@ -1384,7 +1408,7 @@ def _ago(value: dt | None) -> str:
     return f"{seconds_only(dt.now() - value)} ago"
 
 
-def _build_scheduler_summary() -> dict[str, Any]:
+def _build_scheduler_summary() -> SchedulerSummary:
     scheduler_last_active = scheduler.Scheduler.get_last_active()
     scheduler_loaded_at = scheduler.Scheduler.get_loaded_at()
     if scheduler_last_active is None:
@@ -1413,7 +1437,7 @@ def _build_overview_task_card(
     all_runs: list[tasks.RunItem],
     display_start_time: dt,
     display_end_time: dt,
-) -> dict[str, Any]:
+) -> OverviewTaskCard:
     all_runs = sorted(all_runs, key=lambda run: run.scheduled_time)
     recent_runs = all_runs[-10:]
     active_runs = task.get_running_runs()
@@ -1463,7 +1487,7 @@ def _build_overview_task_card(
     }
 
 
-def _blank_segment(start_time: dt, end_time: dt, display_hours: float) -> dict[str, Any]:
+def _blank_segment(start_time: dt, end_time: dt, display_hours: float) -> RunSliceSegment:
     duration_hours = max((end_time - start_time).total_seconds() / 3600, 0)
     width = max((duration_hours / display_hours) * 100, 0.5)
     return {
@@ -1493,7 +1517,7 @@ def _run_bounds(run: tasks.RunItem) -> tuple[dt, dt]:
     return start_time, end_time
 
 
-def _run_segment(run: tasks.RunItem, display_hours: float) -> dict[str, Any]:
+def _run_segment(run: tasks.RunItem, display_hours: float) -> RunSliceSegment:
     start_time, end_time = _run_bounds(run)
     duration_hours = max((end_time - start_time).total_seconds() / 3600, 0)
     width = max((duration_hours / display_hours) * 100, 0.5)
@@ -1574,7 +1598,7 @@ def _get_distinct_sources() -> list[str]:
     return LogManager.get_distinct_sources()
 
 
-def _query_logs(start_dt: dt, end_dt: dt, sources: list[str] | None, limit: int) -> list[dict[str, Any]]:
+def _query_logs(start_dt: dt, end_dt: dt, sources: list[str] | None, limit: int) -> list[LogEntry]:
     filtered_sources = None if not sources or "All Sources" in sources else sources
     rows = LogManager.get_entries(
         limit=limit,
@@ -1582,7 +1606,7 @@ def _query_logs(start_dt: dt, end_dt: dt, sources: list[str] | None, limit: int)
         start=start_dt,
         end=end_dt,
     )
-    result = []
+    result: list[LogEntry] = []
     for row in rows:
         text = getattr(row, "text", "") or ""
         json_value = getattr(row, "json", {}) or {}
@@ -1630,7 +1654,7 @@ def _format_bytes(size_bytes: int) -> str:
     return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
 
 
-def _serialise_kv_entry(entry: dict[str, Any]) -> dict[str, Any]:
+def _serialise_kv_entry(entry: dict[str, Any]) -> KvEntry:
     preview = entry.get("value_preview") or ""
     if entry.get("load_error"):
         preview = f"Error: {entry['load_error']}"
@@ -1693,7 +1717,7 @@ def _find_entry_metadata(key: str) -> dict[str, Any] | None:
     return None
 
 
-def _build_kv_metadata(entry: dict[str, Any] | None) -> list[dict[str, str]]:
+def _build_kv_metadata(entry: dict[str, Any] | None) -> list[LabelValueItem]:
     if entry is None:
         return [{"label": "Status", "value": "No entry selected."}]
     status = "Expired" if entry.get("is_expired") else "Active"
