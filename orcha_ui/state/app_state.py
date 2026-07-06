@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime as dt, timedelta as td
-from typing import Any
 
 import reflex as rx
 
@@ -22,7 +21,6 @@ from orcha_ui.services.types import (
     OverviewSummary,
     RunDetailPayload,
     RunDetailQueryResult,
-    RunSliceData,
     SchedulerSummary,
     TaskDetailPayload,
     TaskDetailQueryResult,
@@ -306,7 +304,7 @@ class TaskDetailState(rx.State):
         self._load_task(_route_param(self, "task_id"))
 
     @rx.event
-    def select_task_label(self, label: str) -> None:
+    def select_task_label(self, label: str) -> rx.event.EventSpec:
         task_id = self.task_picker_lookup.get(label, "")
         self.selected_task_label = label
         self.status_message = "Ready."
@@ -425,7 +423,7 @@ class RunDetailState(rx.State):
         self._load_run(_route_param(self, "run_id"))
 
     @rx.event
-    def select_task_label(self, label: str) -> None:
+    def select_task_label(self, label: str) -> rx.event.EventSpec:
         task_id = self.task_picker_lookup.get(label, "")
         self.selected_task_label = label
         self.status_message = "Ready."
@@ -443,7 +441,7 @@ class RunDetailState(rx.State):
         return rx.redirect(f"/run_details/{next_run_id}")
 
     @rx.event
-    def select_run_label(self, label: str) -> None:
+    def select_run_label(self, label: str) -> rx.event.EventSpec:
         run_id = self.run_picker_lookup.get(label, "")
         self.selected_run_label = label
         self.status_message = "Ready."

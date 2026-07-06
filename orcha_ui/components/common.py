@@ -1,6 +1,10 @@
-from typing import Any
+from typing import Any, Literal
 
 import reflex as rx
+
+# Radix accent colors accepted by rx.button(color_scheme=...). Extend if a call
+# site needs another colour.
+ConfirmColor = Literal["amber", "red"]
 
 
 _TONE_STYLES = {
@@ -51,7 +55,7 @@ def section_card(
     )
 
 
-def tone_badge(text: str | rx.Var, tone: str = "slate") -> rx.Component:
+def tone_badge(text: str | int | rx.Var, tone: str | rx.Var = "slate") -> rx.Component:
     def _badge(current_tone: str) -> rx.Component:
         if current_tone == "slate":
             # Neutral values (ids, timestamps, "N/A", zero counts) are not signals —
@@ -126,7 +130,7 @@ def detail_field(label: str | rx.Var, value: str | rx.Var, tone: str = "slate", 
     )
 
 
-def metric(label: str | rx.Var, value: str | rx.Var, tone: str = "slate") -> rx.Component:
+def metric(label: str | rx.Var, value: str | int | rx.Var, tone: str | rx.Var = "slate") -> rx.Component:
     return rx.vstack(
         rx.text(
             label,
@@ -221,7 +225,7 @@ def overlay_panel(
     title: str,
     body: rx.Component,
     confirm_label: str,
-    confirm_color: str,
+    confirm_color: ConfirmColor,
     on_confirm: Any,
     on_cancel: Any,
 ) -> rx.Component:

@@ -1310,7 +1310,7 @@ def get_threads_payload() -> ThreadsQueryResult:
     for instance_id in sorted(grouped):
         rows = grouped[instance_id]
         updated_at = max(
-            (row.get("updated_at") for row in rows if row.get("updated_at")),
+            (value for row in rows if (value := row.get("updated_at"))),
             default=None,
         )
         online = updated_at is not None and updated_at > (now - _THREAD_INSTANCE_ONLINE_WINDOW)
